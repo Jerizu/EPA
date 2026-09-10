@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ponto & Rotina</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Tesseract.js para OCR direto no navegador -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <!-- Cabeçalho com Menu Hambúrguer -->
+  <header class="navbar">
+    <button id="btnMenu" class="btn-icone" aria-label="Abrir menu">☰</button>
+    <h1>Controle de Ponto</h1>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-atalho-marmita">🍱 Marmita</a>
+  </header>
+
+  <!-- Menu Gaveta Lateral -->
+  <nav id="menuLateral" class="drawer">
+    <div class="drawer-header">
+      <h3>Menu Principal</h3>
+      <button id="btnFecharMenu" class="btn-icone">✕</button>
+    </div>
+    <ul class="drawer-links">
+      <li><a href="#" class="nav-item active" data-aba="abaPonto">⏱️ Registrar Ponto & Relatório</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaMarmita">🍱 Pedir Marmita</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaOnibus">🚌 Horários de Ônibus (SITU / RLC)</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaConfig">⚙️ Salário & Insalubridade</a></li>
+    </ul>
+  </nav>
+  <div id="overlay" class="overlay"></div>
+
+  <main class="container">
+    <!-- ABA 1: REGISTRO DE PONTO E RESUMO -->
+    <section id="abaPonto" class="aba-conteudo active">
+      <!-- Card Notificações -->
+      <div class="card card-lembrete">
+        <div>
+          <strong>Lembrete de Ponto</strong>
+          <p>Receba avisos na tela para não esquecer de registrar.</p>
+        </div>
+        <button id="btnPermissaoNotif" class="btn-pequeno">Ativar</button>
+      </div>
+
+      <!-- Card OCR / Câmera -->
+      <div class="card">
+        <h2>📸 Escanear Comprovante</h2>
+        <div class="upload-area">
+          <label for="inputFoto" class="btn-upload">Tirar Foto do Canhoto</label>
+          <input type="file" id="inputFoto" accept="image/*" capture="environment" />
+        </div>
+        <div id="statusOcr" class="status-msg"></div>
+
+        <div class="form-grid">
+          <label>Data: <input type="date" id="regData" /></label>
+          <label>Hora: <input type="time" id="regHora" /></label>
+          <label>
+            Tipo:
+            <select id="regTipo">
+              <option value="Entrada">Entrada</option>
+              <option value="Saída Almoço">Saída Almoço</option>
+              <option value="Retorno Almoço">Retorno Almoço</option>
+              <option value="Saída">Saída</option>
+            </select>
+          </label>
+        </div>
+        <button id="btnSalvarRegistro" class="btn-primario">Salvar Batida</button>
+      </div>
+
+      <!-- Card Resumo Financeiro -->
+      <div class="card">
+        <h2>📊 Resumo das Horas e Ganhos</h2>
+        <div class="metricas-grid">
+          <div class="metrica">
+            <span>Horas Totais</span>
+            <strong id="mHorasTrabalhadas">0h 00m</strong>
+          </div>
+          <div class="metrica">
+            <span>Horas Extras</span>
+            <strong id="mHorasExtras">0h 00m</strong>
+          </div>
+          <div class="metrica">
+            <span>Valor Extras</span>
+            <strong id="mValorExtras">R$ 0,00</strong>
+          </div>
+          <div class="metrica destaque">
+            <span>Insalubridade</span>
+            <strong id="mValorInsalubridade">R$ 0,00</strong>
+          </div>
+          <div class="metrica total">
+            <span>Previsão Salarial Bruta</span>
+            <strong id="mTotalEstimado">R$ 0,00</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Histórico de Batidas -->
+      <div class="card">
+        <div class="tabela-header">
+          <h2>Histórico do Mês</h2>
+          <button id="btnLimparTudo" class="btn-perigo">Limpar Tudo</button>
+        </div>
+        <div class="tabela-responsiva">
+          <table id="tabelaRegistros">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Hora</th>
+                <th>Tipo</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 2: FORMULÁRIO DE MARMITA -->
+    <section id="abaMarmita" class="aba-conteudo">
+      <div class="card">
+        <div class="cabecalho-secao">
+          <h2>🍱 Pedido de Marmita</h2>
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-link">Abrir em Nova Aba ↗</a>
+        </div>
+        <p class="legenda">Preencha o formulário abaixo diretamente pelo app:</p>
+        <div class="iframe-container">
+          <iframe 
+            src="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform?embedded=true" 
+            width="100%" 
+            height="650" 
+            frameborder="0" 
+            marginheight="0" 
+            marginwidth="0">Carregando formulário...</iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: HORÁRIOS DE ÔNIBUS (SITU / RÁPIDO LUXO) -->
+    <section id="abaOnibus" class="aba-conteudo">
+      <div class="card">
+        <h2>🚌 Consulta de Linhas e Horários</h2>
+        <div class="onibus-botoes">
+          <button class="btn-tab-onibus active" onclick="mostrarFrameOnibus('situ')">SITU Jundiaí</button>
+          <button class="btn-tab-onibus" onclick="mostrarFrameOnibus('rlc')">Rápido Luxo Campinas</button>
+        </div>
+
+        <!-- Frame SITU -->
+        <div id="boxSitu" class="frame-box">
+          <div class="link-externo-aviso">
+            <span>Terminal e Linhas Municipais de Jundiaí</span>
+            <a href="https://situ.jundiai.sp.gov.br/" target="_blank" class="btn-link">Abrir site do SITU ↗</a>
+          </div>
+          <div class="iframe-container">
+            <iframe id="frameSitu" src="https://situ.jundiai.sp.gov.br/" width="100%" height="600"></iframe>
+          </div>
+        </div>
+
+        <!-- Frame Rápido Luxo -->
+        <div id="boxRlc" class="frame-box" style="display: none;">
+          <div class="link-externo-aviso">
+            <span>Linhas Intermunicipais Rápido Luxo Campinas</span>
+            <a href="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" target="_blank" class="btn-link">Abrir site Rápido Campinas ↗</a>
+          </div>
+          <div class="iframe-container">
+            <iframe id="frameRlc" src="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" width="100%" height="600"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 4: CONFIGURAÇÕES -->
+    <section id="abaConfig" class="aba-conteudo">
+      <div class="card">
+        <h2>⚙️ Parâmetros Salariais e Escala</h2>
+        <div class="form-grid">
+          <label>
+            Salário Base (R$):
+            <input type="number" id="cfgSalario" step="0.01" />
+          </label>
+          <label>
+            Carga Horária Mensal (h):
+            <input type="number" id="cfgCargaMensal" />
+          </label>
+          <label>
+            Jornada Diária Padrão (h):
+            <input type="number" id="cfgJornadaDiaria" />
+          </label>
+          <label>
+            Hora Extra (% adicional):
+            <input type="number" id="cfgAdicionalHE" />
+          </label>
+          <label>
+            Grau de Insalubridade:
+            <select id="cfgGrauInsalubridade">
+              <option value="0">0% (Sem Insalubridade)</option>
+              <option value="10">10% (Grau Mínimo)</option>
+              <option value="20" selected>20% (Grau Médio)</option>
+              <option value="40">40% (Grau Máximo)</option>
+            </select>
+          </label>
+          <label>
+            Base de Cálculo da Insalubridade:
+            <select id="cfgBaseInsalubridade">
+              <option value="minimo">Salário Mínimo</option>
+              <option value="base">Salário Base da Função</option>
+            </select>
+          </label>
+          <label>
+            Valor do Salário Mínimo Vigente (R$):
+            <input type="number" id="cfgSalarioMinimo" step="0.01" />
+          </label>
+        </div>
+        <button id="btnSalvarConfig" class="btn-primario">Salvar Configurações</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
