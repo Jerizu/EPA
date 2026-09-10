@@ -115,7 +115,6 @@ function processarImagemCanvas(file) {
         const canvas = document.getElementById('canvasPreProcess');
         const ctx = canvas.getContext('2d');
 
-        // Escala para resolução otimizada
         const maxDim = 1800;
         let w = img.width;
         let h = img.height;
@@ -133,21 +132,17 @@ function processarImagemCanvas(file) {
         canvas.height = h;
         ctx.drawImage(img, 0, 0, w, h);
 
-        // Foto guardada para upload no Google Drive
         fotoBase64Atual = canvas.toDataURL('image/jpeg', 0.85);
 
-        // Aumento de contraste e normalização de tons de cinza
         const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
 
-        // Calcula média de luminosidade da imagem para binarização adaptativa
         let somaLum = 0;
         const totalPixels = d.length / 4;
         for (let i = 0; i < d.length; i += 4) {
           somaLum += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
         }
         const mediaLum = somaLum / totalPixels;
-        // Limiar ajustado baseado na claridade média da cena
         const threshold = Math.max(95, Math.min(160, mediaLum * 0.88));
 
         for (let i = 0; i < d.length; i += 4) {
@@ -169,18 +164,13 @@ function processarImagemCanvas(file) {
 
 // --- EXTRATOR ROBUSTO DE DATA E HORA ---
 function extrairDataHoraTexto(rawText) {
-  // Normaliza o texto e remove quebras no meio de palavras
   let limpo = rawText.toUpperCase();
-  
-  // Trata a quebra típica do canhoto: 'D' no final da linha e 'ATA:' no início da próxima
   limpo = limpo.replace(/D\s*[\r\n]+\s*ATA/g, "DATA");
-  // Substitui caracteres comumente confundidos por OCR em fontes condensadas
   limpo = limpo.replace(/OATA/g, "DATA").replace(/QATA/g, "DATA");
 
   let dataDetectada = null;
   let horaDetectada = null;
 
-  // 1. Procura DATA: DD/MM/AAAA ou ATA: DD/MM/AAAA
   const regexData = /(?:D?ATA|DATA)?\s*[:\.\-]?\s*(\d{2})[\/\.\-](\d{2})[\/\.\-](20\d{2}|\d{2})/;
   const matchData = limpo.match(regexData);
 
@@ -189,7 +179,6 @@ function extrairDataHoraTexto(rawText) {
     if (ano.length === 2) ano = "20" + ano;
     dataDetectada = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
   } else {
-    // Procura qualquer sequência DD/MM/AAAA
     const matchDataSolta = limpo.match(/(\d{2})[\/\.-](\d{2})[\/\.-](20\d{2})/);
     if (matchDataSolta) {
       const [_, dia, mes, ano] = matchDataSolta;
@@ -197,7 +186,6 @@ function extrairDataHoraTexto(rawText) {
     }
   }
 
-  // 2. Procura HORA: HH:MM ou HORA. HH.MM
   const regexHora = /HORA\s*[:\.\-]?\s*([0-2]?[0-9])[:\.\-]([0-5][0-9])/;
   const matchHora = limpo.match(regexHora);
 
@@ -205,10 +193,8 @@ function extrairDataHoraTexto(rawText) {
     let [_, h, m] = matchHora;
     horaDetectada = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
   } else {
-    // Busca qualquer padrão HH:MM válido
     const matchesHoras = [...limpo.matchAll(/\b([0-2]?[0-9])[:\.]([0-5][0-9])\b/g)];
     if (matchesHoras.length > 0) {
-      // No comprovante Control iD, o horário da batida fica mais para baixo
       const item = matchesHoras.find(m => Number(m[1]) <= 23 && Number(m[2]) <= 59);
       if (item) {
         horaDetectada = `${item[1].padStart(2, '0')}:${item[2].padStart(2, '0')}`;
@@ -261,7 +247,7 @@ inputFoto.addEventListener('change', async (e) => {
       statusOcr.innerText = `⚠️ Leitura parcial. Confira data e hora nos campos.`;
       statusOcr.style.color = "#d97706";
     } else {
-      statusOcr.innerText = `⚠️ Não conseguimos ler os dados automaticamente. Digite nos campos abaixo.`;
+      statusOcr.innerText = `⚠️ Não foi possível ler automaticamente. Digite nos campos abaixo.`;
       statusOcr.style.color = "#b91c1c";
     }
   } catch (err) {
@@ -271,7 +257,7 @@ inputFoto.addEventListener('change', async (e) => {
   }
 });
 
-// --- COMUNICAÇÃO COM A PLANILHA ---
+// --- COMUNICAÇÃO COM A PLANILHA (POST E GET) ---
 async function enviarParaNuvem(payload) {
   if (!config.apiNuvem) return null;
 
@@ -301,7 +287,6 @@ async function enviarParaNuvem(payload) {
   }
 }
 
-// Puxar configurações da planilha (com proteção contra valores em branco)
 async function puxarConfigsDaPlanilha() {
   if (!config.apiNuvem) return;
   statusOcr.innerText = "⏳ Buscando escala e salário salvos na planilha...";
@@ -313,7 +298,6 @@ async function puxarConfigsDaPlanilha() {
     if (json && json.status === "sucesso" && json.configs) {
       let dadosEncontrados = false;
 
-      // Só atualiza campos que realmente tiverem valor válido
       if (json.configs.escala) {
         const escNu = json.configs.escala;
         if (escNu.entrada) { escala.entrada = escNu.entrada; dadosEncontrados = true; }
@@ -411,10 +395,49 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
   }
 });
 
-// --- EXCLUIR OU INATIVAR NA PLANILHA E APARELHO ---
+// --- EXCLUIR UMA FOTO ESPECÍFICA DO GOOGLE DRIVE PELO SITE ---
+window.excluirFotoDrive = async function(data, tipoKey) {
+  const dia = diasPonto[data];
+  if (!dia || !dia.linksFotos || !dia.linksFotos[tipoKey]) return;
+
+  const urlFoto = dia.linksFotos[tipoKey];
+  const rotulos = { e1: "Entrada", s1: "Saída Almoço", e2: "Volta Almoço", s2: "Saída" };
+  const nomeTipo = rotulos[tipoKey] || tipoKey;
+
+  if (!confirm(`Deseja realmente excluir esta foto de ${nomeTipo} (${data.split('-').reverse().join('/')}) do Google Drive?`)) {
+    return;
+  }
+
+  // Remove localmente
+  delete dia.linksFotos[tipoKey];
+  localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
+  renderizarTabela();
+
+  statusOcr.innerText = `⏳ Excluindo arquivo do Google Drive...`;
+  statusOcr.style.color = "#0284c7";
+
+  if (config.apiNuvem) {
+    const res = await enviarParaNuvem({
+      acao: "excluir_foto",
+      fotoUrl: urlFoto
+    });
+
+    if (res && res.status === "sucesso") {
+      statusOcr.innerText = `🗑️ Foto de ${nomeTipo} excluída do Google Drive com sucesso!`;
+      statusOcr.style.color = "#15803d";
+    } else {
+      statusOcr.innerText = `Foto removida da tela (verifique a lixeira do Drive).`;
+      statusOcr.style.color = "#d97706";
+    }
+  }
+};
+
+// --- EXCLUIR OU INATIVAR NA PLANILHA E APARELHO (E DRIVE) ---
 window.excluirDia = async function(data) {
   const dataFmt = data.split('-').reverse().join('/');
-  const acaoTexto = config.modoExclusao === 'inativar_dia' ? "colocar como STATUS: INATIVO na planilha" : "EXCLUIR a linha da planilha";
+  const acaoTexto = config.modoExclusao === 'inativar_dia' 
+    ? "colocar como STATUS: INATIVO na planilha e apagar fotos do Drive" 
+    : "EXCLUIR da planilha e apagar fotos do Drive";
 
   if (!confirm(`Deseja retirar o dia ${dataFmt} do espelho e ${acaoTexto}?`)) {
     return;
@@ -425,13 +448,13 @@ window.excluirDia = async function(data) {
   renderizarTabela();
   calcularMetricas();
 
-  statusOcr.innerText = `⏳ Atualizando status do dia ${dataFmt} na planilha...`;
+  statusOcr.innerText = `⏳ Atualizando status e apagando fotos do Drive de ${dataFmt}...`;
   statusOcr.style.color = "#0284c7";
 
   if (config.apiNuvem) {
     const res = await enviarParaNuvem({ acao: config.modoExclusao, data: data });
     if (res && res.status === "sucesso") {
-      statusOcr.innerText = `🗑️ Dia ${dataFmt} removido do espelho e atualizado na planilha!`;
+      statusOcr.innerText = `🗑️ Dia ${dataFmt} removido e fotos apagadas do Google Drive!`;
       statusOcr.style.color = "#15803d";
     } else {
       statusOcr.innerText = `Removido do espelho local (verifique a planilha).`;
@@ -441,7 +464,7 @@ window.excluirDia = async function(data) {
 };
 
 document.getElementById('btnLimparTudo').addEventListener('click', async () => {
-  if (!confirm("ATENÇÃO: Deseja apagar TODOS os registros do espelho e limpar as batidas da planilha?")) {
+  if (!confirm("ATENÇÃO: Deseja apagar TODOS os registros do espelho, da planilha e TODAS as fotos salvas no Google Drive?")) {
     return;
   }
 
@@ -450,12 +473,12 @@ document.getElementById('btnLimparTudo').addEventListener('click', async () => {
   renderizarTabela();
   calcularMetricas();
 
-  statusOcr.innerText = `⏳ Limpando batidas na planilha...`;
+  statusOcr.innerText = `⏳ Limpando batidas na planilha e arquivos do Google Drive...`;
   statusOcr.style.color = "#0284c7";
 
   if (config.apiNuvem) {
     await enviarParaNuvem({ acao: "limpar_tudo" });
-    statusOcr.innerText = `🗑️ Todos os dados foram limpos do aparelho e da planilha!`;
+    statusOcr.innerText = `🗑️ Todos os dados e fotos foram limpos do aparelho, planilha e Drive!`;
     statusOcr.style.color = "#15803d";
   }
 });
@@ -564,13 +587,19 @@ function renderizarTabela() {
     const dia = diasPonto[data];
     const { minutosTrabalhados, minutosExtras } = calcularDia(dia);
 
+    // Links para fotos no Drive + botão individual de excluir do Drive
     let fotosHtml = '-';
     if (dia.linksFotos && Object.keys(dia.linksFotos).length > 0) {
       fotosHtml = '<div class="links-fotos-grid">';
       ['e1', 's1', 'e2', 's2'].forEach((k, idx) => {
         if (dia.linksFotos[k]) {
           const rotulos = ['E1', 'S1', 'E2', 'S2'];
-          fotosHtml += `<a href="${dia.linksFotos[k]}" target="_blank" class="badge-foto">${rotulos[idx]}</a>`;
+          fotosHtml += `
+            <div class="item-foto-badge">
+              <a href="${dia.linksFotos[k]}" target="_blank" class="badge-foto" title="Abrir foto no Google Drive">${rotulos[idx]}</a>
+              <button onclick="excluirFotoDrive('${data}', '${k}')" class="btn-del-foto" title="Excluir esta foto do Google Drive">✕</button>
+            </div>
+          `;
         }
       });
       fotosHtml += '</div>';
@@ -586,7 +615,7 @@ function renderizarTabela() {
       <td><strong>${minToHoursStr(minutosTrabalhados)}</strong></td>
       <td style="color:${minutosExtras > 0 ? '#16a34a' : '#64748b'}">${minToHoursStr(minutosExtras)}</td>
       <td>${fotosHtml}</td>
-      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Retirar e atualizar status na planilha">🗑️</button></td>
+      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Retirar dia e excluir fotos do Drive">🗑️</button></td>
     `;
     tbody.appendChild(tr);
   });
