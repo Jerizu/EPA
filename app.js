@@ -20,6 +20,9 @@ let config = JSON.parse(localStorage.getItem('ponto_config') || JSON.stringify({
   salarioMinimo: 1412
 }));
 
+// Rastreamento para não repetir notificações no mesmo dia
+let notificacoesEnviadas = JSON.parse(localStorage.getItem('ponto_notif_log') || '{}');
+
 // Preenchimento inicial das telas
 function carregarValores() {
   // Escala
@@ -56,7 +59,7 @@ document.getElementById('cfgTipoRemuneracao').addEventListener('change', ajustar
 // Data de hoje como padrão
 document.getElementById('regData').value = new Date().toISOString().split('T')[0];
 
-// --- MENU LATERAL ---
+// --- MENU LATERAL (DRAWER) ---
 const btnMenu = document.getElementById('btnMenu');
 const btnFecharMenu = document.getElementById('btnFecharMenu');
 const menuLateral = document.getElementById('menuLateral');
@@ -87,7 +90,7 @@ navLinks.forEach(link => {
   });
 });
 
-// --- OCR CALIBRADO PARA O FORMATO CONTROL ID (DATA:DD/MM/AAAA HORA:HH:MM) ---
+// --- OCR CONTROL ID (DATA:DD/MM/AAAA HORA:HH:MM) ---
 const inputFoto = document.getElementById('inputFoto');
 const statusOcr = document.getElementById('statusOcr');
 
@@ -103,29 +106,22 @@ inputFoto.addEventListener('change', async (e) => {
     await worker.terminate();
 
     const raw = res.data.text.toUpperCase();
-    statusOcr.innerText = "Texto processado! Buscando data e hora...";
+    statusOcr.innerText = "Texto processado! Extraindo data e hora...";
 
-    // 1. Busca específica por rótulos presentes no cupom: DATA:DD/MM/AAAA e HORA:HH:MM
     let regexData = /DATA\s*[:\.]?\s*(\d{2})[\/\.-](\d{2})[\/\.-](\d{4})/;
     let regexHora = /HORA\s*[:\.]?\s*(\d{2})[:\.](\d{2})/;
 
     let matchData = raw.match(regexData);
     let matchHora = raw.match(regexHora);
 
-    // Fallback caso a palavra DATA/HORA esteja ilegível ou apagada na bobina térmica
-    if (!matchData) {
-      matchData = raw.match(/(\d{2})[\/\.-](\d{2})[\/\.-](\d{4})/);
-    }
-    if (!matchHora) {
-      matchHora = raw.match(/(\d{2})[:\.](\d{2})/);
-    }
+    if (!matchData) matchData = raw.match(/(\d{2})[\/\.-](\d{2})[\/\.-](\d{4})/);
+    if (!matchHora) matchHora = raw.match(/(\d{2})[:\.](\d{2})/);
 
     if (matchData) {
       const [_, dia, mes, ano] = matchData;
       const dataIso = `${ano}-${mes}-${dia}`;
       document.getElementById('regData').value = dataIso;
 
-      // Sugere automaticamente qual batida é com base no que já existe no dia
       const diaObj = diasPonto[dataIso] || {};
       const selectTipo = document.getElementById('regTipo');
       if (!diaObj.e1) selectTipo.value = "e1";
@@ -138,21 +134,21 @@ inputFoto.addEventListener('change', async (e) => {
       document.getElementById('regHora').value = `${matchHora[1]}:${matchHora[2]}`;
     }
 
-    statusOcr.innerText = "✅ Leitura concluída! Confira os dados antes de lançar.";
+    statusOcr.innerText = "✅ Leitura concluída! Revise antes de lançar.";
   } catch (err) {
     console.error(err);
-    statusOcr.innerText = "⚠️ Dificuldade na leitura automática. Digite a hora manualmente.";
+    statusOcr.innerText = "⚠️ Erro na leitura automática. Digite manualmente.";
   }
 });
 
-// --- LANÇAR BATIDA NO DIA ---
+// --- REGISTRO E GRAVAÇÃO ---
 document.getElementById('btnSalvarBatida').addEventListener('click', () => {
   const data = document.getElementById('regData').value;
   const hora = document.getElementById('regHora').value;
   const tipo = document.getElementById('regTipo').value;
 
   if (!data || !hora) {
-    alert("Informe a data e a hora do ponto.");
+    alert("Informe data e hora.");
     return;
   }
 
@@ -165,10 +161,10 @@ document.getElementById('btnSalvarBatida').addEventListener('click', () => {
 
   renderizarTabela();
   calcularMetricas();
-  statusOcr.innerText = `Batida salva para ${data.split('-').reverse().join('/')}!`;
+  statusOcr.innerText = `Batida registrada com sucesso!`;
 });
 
-// --- SALVAR ESCALA & CONFIGURAÇÕES ---
+// Salvar Escala
 document.getElementById('btnSalvarEscala').addEventListener('click', () => {
   escala = {
     entrada: document.getElementById('escEntrada').value,
@@ -179,9 +175,10 @@ document.getElementById('btnSalvarEscala').addEventListener('click', () => {
   };
   localStorage.setItem('ponto_escala', JSON.stringify(escala));
   calcularMetricas();
-  alert("Horários da escala salvos com sucesso!");
+  alert("Horários da escala atualizados! Os lembretes soarão 5 min antes desses horários.");
 });
 
+// Salvar Configuração Salarial
 document.getElementById('btnSalvarConfig').addEventListener('click', () => {
   config = {
     tipoRemuneracao: document.getElementById('cfgTipoRemuneracao').value,
@@ -194,12 +191,11 @@ document.getElementById('btnSalvarConfig').addEventListener('click', () => {
   };
   localStorage.setItem('ponto_config', JSON.stringify(config));
   calcularMetricas();
-  alert("Parâmetros salariais atualizados!");
+  alert("Configurações salariais salvas!");
 });
 
-// Excluir dia
 window.excluirDia = function(data) {
-  if (confirm(`Deseja apagar todos os registros do dia ${data.split('-').reverse().join('/')}?`)) {
+  if (confirm(`Excluir as batidas do dia ${data.split('-').reverse().join('/')}?`)) {
     delete diasPonto[data];
     localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
     renderizarTabela();
@@ -208,7 +204,7 @@ window.excluirDia = function(data) {
 };
 
 document.getElementById('btnLimparTudo').addEventListener('click', () => {
-  if (confirm("Tem certeza que deseja apagar todos os registros salvos?")) {
+  if (confirm("Deseja apagar todos os registros da tabela?")) {
     diasPonto = {};
     localStorage.removeItem('ponto_dias');
     renderizarTabela();
@@ -216,7 +212,7 @@ document.getElementById('btnLimparTudo').addEventListener('click', () => {
   }
 });
 
-// --- RENDERIZAR TABELA DO ESPELHO ---
+// --- CÁLCULOS E TABELA ---
 function timeToMinutes(t) {
   if (!t) return null;
   const [h, m] = t.split(':').map(Number);
@@ -231,24 +227,14 @@ function minToHoursStr(min) {
 
 function calcularDia(diaObj) {
   let minutosTrabalhados = 0;
-
   const e1 = timeToMinutes(diaObj.e1);
   const s1 = timeToMinutes(diaObj.s1);
   const e2 = timeToMinutes(diaObj.e2);
   const s2 = timeToMinutes(diaObj.s2);
 
-  // Período da Manhã (Entrada até Saída para Almoço)
-  if (e1 !== null && s1 !== null && s1 > e1) {
-    minutosTrabalhados += (s1 - e1);
-  }
-  // Período da Tarde (Retorno Almoço até Saída)
-  if (e2 !== null && s2 !== null && s2 > e2) {
-    minutosTrabalhados += (s2 - e2);
-  }
-  // Caso só tenha entrada e saída final (sem intervalo registrado)
-  if (e1 !== null && s2 !== null && s1 === null && e2 === null && s2 > e1) {
-    minutosTrabalhados += (s2 - e1);
-  }
+  if (e1 !== null && s1 !== null && s1 > e1) minutosTrabalhados += (s1 - e1);
+  if (e2 !== null && s2 !== null && s2 > e2) minutosTrabalhados += (s2 - e2);
+  if (e1 !== null && s2 !== null && s1 === null && e2 === null && s2 > e1) minutosTrabalhados += (s2 - e1);
 
   const minutosPadrao = (escala.cargaDia || 8) * 60;
   let minutosExtras = 0;
@@ -262,7 +248,6 @@ function calcularDia(diaObj) {
 function renderizarTabela() {
   const tbody = document.querySelector('#tabelaEspelho tbody');
   tbody.innerHTML = '';
-
   const datas = Object.keys(diasPonto).sort();
 
   datas.forEach(data => {
@@ -284,7 +269,6 @@ function renderizarTabela() {
   });
 }
 
-// --- APURAÇÃO FINANCEIRA ---
 function calcularMetricas() {
   let totalMinutosTrabalhados = 0;
   let totalMinutosExtras = 0;
@@ -295,7 +279,6 @@ function calcularMetricas() {
     totalMinutosExtras += minutosExtras;
   });
 
-  // Determina valor da hora normal
   let valorHora = 0;
   let valorSalarioBaseExibido = 0;
 
@@ -310,13 +293,11 @@ function calcularMetricas() {
   const valorHoraExtra = valorHora * (1 + config.adicionalHE / 100);
   const totalValorExtras = (totalMinutosExtras / 60) * valorHoraExtra;
 
-  // Insalubridade
   const baseInsalubridade = (config.baseInsalubridade === 'base') ? config.valorSalario : config.salarioMinimo;
   const valorInsalubridade = baseInsalubridade * (config.grauInsalubridade / 100);
 
   const totalGeralBruto = valorSalarioBaseExibido + totalValorExtras + valorInsalubridade;
 
-  // Atualização em tela
   document.getElementById('mHorasTrabalhadas').innerText = minToHoursStr(totalMinutosTrabalhados);
   document.getElementById('mHorasExtras').innerText = minToHoursStr(totalMinutosExtras);
 
@@ -327,7 +308,7 @@ function calcularMetricas() {
   document.getElementById('mTotalEstimado').innerText = fmtMoeda(totalGeralBruto);
 }
 
-// --- ÔNIBUS (ALTERNÂNCIA) ---
+// --- ÔNIBUS ---
 window.mostrarFrameOnibus = function(tipo) {
   const btnTabs = document.querySelectorAll('.btn-tab-onibus');
   const boxSitu = document.getElementById('boxSitu');
@@ -346,20 +327,89 @@ window.mostrarFrameOnibus = function(tipo) {
   }
 };
 
-// --- NOTIFICAÇÕES BASEADAS NA ESCALA ---
+// --- MOTOR DE NOTIFICAÇÕES (5 MIN ANTES + MARMITA SEXTA 15H) ---
+
+// Solicitação de permissão
 document.getElementById('btnPermissaoNotif').addEventListener('click', async () => {
   if (!("Notification" in window)) {
-    alert("Seu navegador não suporta notificações.");
+    alert("Seu navegador não suporta notificações de área de trabalho/push.");
     return;
   }
   const perm = await Notification.requestPermission();
   if (perm === 'granted') {
-    new Notification("Lembretes Ativados!", {
-      body: `Você será lembrado nos horários da sua escala (Entrada: ${escala.entrada}, Saída: ${escala.saida}).`,
-      icon: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png"
-    });
+    dispararNotificacao("🔔 Notificações Ativadas!", "Você será avisado 5 minutos antes de cada batida e às sextas-feiras às 15h para a marmita.");
   }
 });
+
+function dispararNotificacao(titulo, corpo) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(titulo, {
+      body: corpo,
+      icon: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png",
+      vibrate: [200, 100, 200]
+    });
+  }
+}
+
+// Converte "HH:MM" e subtrai N minutos
+function obterMinutosMenosDelta(horarioStr, deltaMinutos = 5) {
+  const [h, m] = horarioStr.split(':').map(Number);
+  let totalMin = h * 60 + m - deltaMinutos;
+  if (totalMin < 0) totalMin += 24 * 60;
+  const resH = Math.floor(totalMin / 60);
+  const resM = totalMin % 60;
+  return `${String(resH).padStart(2, '0')}:${String(resM).padStart(2, '0')}`;
+}
+
+// Rotina checada a cada 30 segundos
+function verificarAgendamentosNotificacoes() {
+  const agora = new Date();
+  const hojeStr = agora.toISOString().split('T')[0];
+  const horaAtualStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+  const diaSemana = agora.getDay(); // 0 = Domingo, 5 = Sexta-feira
+
+  if (!notificacoesEnviadas[hojeStr]) {
+    notificacoesEnviadas = { [hojeStr]: {} };
+  }
+  const logsHoje = notificacoesEnviadas[hojeStr];
+
+  // 1. Lembretes das Batidas de Ponto (5 minutos antes)
+  const eventosPonto = [
+    { chave: 'notif_e1', horario: escala.entrada, rotulo: 'Entrada na Empresa' },
+    { chave: 'notif_s1', horario: escala.almocoSaida, rotulo: 'Saída para Almoço' },
+    { chave: 'notif_e2', horario: escala.almocoVolta, rotulo: 'Retorno do Almoço' },
+    { chave: 'notif_s2', horario: escala.saida, rotulo: 'Saída da Empresa' }
+  ];
+
+  eventosPonto.forEach(ev => {
+    if (ev.horario) {
+      const horaLembrete = obterMinutosMenosDelta(ev.horario, 5);
+      if (horaAtualStr === horaLembrete && !logsHoje[ev.chave]) {
+        dispararNotificacao(
+          "⏱️ Lembrete de Ponto (Faltam 5 min)",
+          `Hora prevista de ${ev.rotulo} às ${ev.horario}. Não esqueça de bater o ponto e pegar o comprovante!`
+        );
+        logsHoje[ev.chave] = true;
+        localStorage.setItem('ponto_notif_log', JSON.stringify(notificacoesEnviadas));
+      }
+    }
+  });
+
+  // 2. Lembrete da Marmita (Sexta-feira a partir das 15:00)
+  // diaSemana 5 = Sexta-feira
+  if (diaSemana === 5 && agora.getHours() >= 15 && !logsHoje['notif_marmita']) {
+    dispararNotificacao(
+      "🍱 Lembrete de Marmita!",
+      "Já são 15h de sexta-feira! Lembre-se de preencher o formulário para pedir sua marmita da semana."
+    );
+    logsHoje['notif_marmita'] = true;
+    localStorage.setItem('ponto_notif_log', JSON.stringify(notificacoesEnviadas));
+  }
+}
+
+// Inicia monitor a cada 30 segundos
+setInterval(verificarAgendamentosNotificacoes, 30000);
+verificarAgendamentosNotificacoes();
 
 // Inicialização Geral
 carregarValores();
