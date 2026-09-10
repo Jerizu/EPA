@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,12 +9,14 @@
   <!-- Tesseract.js para OCR direto no celular -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
+
 <body>
   <!-- Topo com Menu -->
   <header class="navbar">
     <button id="btnMenu" class="btn-icone" aria-label="Menu">☰</button>
     <h1>Controle de Ponto</h1>
-    <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-marmita">🍱 Marmita</a>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform"
+      target="_blank" class="btn-marmita">🍱 Marmita</a>
   </header>
 
   <!-- Gaveta Lateral -->
@@ -160,14 +163,13 @@
       <div class="card">
         <div class="cabecalho-secao">
           <h2>🍱 Solicitar Marmita</h2>
-          <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-link">Abrir no Forms ↗</a>
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform"
+            target="_blank" class="btn-link">Abrir no Forms ↗</a>
         </div>
         <div class="iframe-container">
-          <iframe 
-            src="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform?embedded=true" 
-            width="100%" 
-            height="650" 
-            frameborder="0">Carregando formulário...</iframe>
+          <iframe
+            src="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform?embedded=true"
+            width="100%" height="650" frameborder="0">Carregando formulário...</iframe>
         </div>
       </div>
     </section>
@@ -194,10 +196,12 @@
         <div id="boxRlc" class="frame-box" style="display: none;">
           <div class="cabecalho-secao">
             <span>Rápido Luxo Campinas</span>
-            <a href="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" target="_blank" class="btn-link">Abrir Site Oficial ↗</a>
+            <a href="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" target="_blank"
+              class="btn-link">Abrir Site Oficial ↗</a>
           </div>
           <div class="iframe-container">
-            <iframe src="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" width="100%" height="580"></iframe>
+            <iframe src="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" width="100%"
+              height="580"></iframe>
           </div>
         </div>
       </div>
@@ -205,6 +209,11 @@
 
     <!-- ABA 5: CONFIGURAÇÕES SALARIAIS -->
     <section id="abaConfig" class="aba-conteudo">
+      <label class="col-span-2">
+        URL da API Nuvem (Google Apps Script):
+        <input type="text" id="cfgApiNuvem"
+          placeholder="https://script.google.com/macros/s/AKfycbzTk_QPMWBHbNpagrSFKmk2O8r2Wenlm5ECRjK-lQlBJOShoLL9Z1HBusMpDBW0CWJJ/exec" />
+      </label>
       <div class="card">
         <h2>⚙️ Parâmetros Financeiros</h2>
         <div class="form-grid">
@@ -248,4 +257,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>
