@@ -1,25 +1,22 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Controle de Ponto & Rotina</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Tesseract.js para OCR direto no celular -->
+  <!-- Tesseract.js v5 -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
-
 <body>
-  <!-- Topo com Menu -->
+  <!-- Cabeçalho Principal -->
   <header class="navbar">
-    <button id="btnMenu" class="btn-icone" aria-label="Menu">☰</button>
+    <button id="btnMenu" class="btn-icone" aria-label="Abrir Menu">☰</button>
     <h1>Controle de Ponto</h1>
-    <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform"
-      target="_blank" class="btn-marmita">🍱 Marmita</a>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-marmita">🍱 Marmita</a>
   </header>
 
-  <!-- Gaveta Lateral -->
+  <!-- Gaveta Lateral de Navegação -->
   <nav id="menuLateral" class="drawer">
     <div class="drawer-header">
       <h3>Menu</h3>
@@ -30,31 +27,35 @@
       <li><a href="#" class="nav-item" data-aba="abaEscala">📅 Horários da Escala</a></li>
       <li><a href="#" class="nav-item" data-aba="abaMarmita">🍱 Pedir Marmita</a></li>
       <li><a href="#" class="nav-item" data-aba="abaOnibus">🚌 Linhas de Ônibus (SITU / RLC)</a></li>
-      <li><a href="#" class="nav-item" data-aba="abaConfig">⚙️ Salário & Insalubridade</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaConfig">⚙️ Salário & Nuvem</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaBackup">💾 Backup & Exportar Dados</a></li>
     </ul>
   </nav>
   <div id="overlay" class="overlay"></div>
 
   <main class="container">
-    <!-- ABA 1: REGISTRO DE PONTO E RESUMO -->
+    <!-- ABA 1: REGISTRO DE PONTO E ESPELHO -->
     <section id="abaPonto" class="aba-conteudo active">
-      <!-- Lembrete -->
+      <!-- Lembrete de Notificações -->
       <div class="card card-lembrete">
         <div>
-          <strong>Notificações de Ponto</strong>
-          <p>Receba alertas baseados nos horários da sua escala.</p>
+          <strong>Lembretes Automáticos</strong>
+          <p>Avisos 5 min antes da batida e sextas às 15h para a marmita.</p>
         </div>
         <button id="btnPermissaoNotif" class="btn-secundario-pequeno">Ativar</button>
       </div>
 
-      <!-- Scanner OCR -->
+      <!-- Scanner OCR & Câmera -->
       <div class="card">
         <h2>📸 Escanear Comprovante</h2>
         <div class="upload-area">
           <label for="inputFoto" class="btn-upload">Tirar Foto do Canhoto</label>
           <input type="file" id="inputFoto" accept="image/*" capture="environment" />
         </div>
-        <div id="statusOcr" class="status-msg"></div>
+
+        <canvas id="canvasPreProcess" style="display: none;"></canvas>
+
+        <div id="statusOcr" class="status-msg">Tire uma foto nítida e bem iluminada do canhoto.</div>
 
         <div class="form-grid">
           <label>Data:
@@ -63,7 +64,7 @@
           <label>Hora Registrada:
             <input type="time" id="regHora" />
           </label>
-          <label class="col-span-2">Tipo de Registro:
+          <label class="col-span-2">Tipo de Batida:
             <select id="regTipo">
               <option value="e1">1. Entrada na Empresa</option>
               <option value="s1">2. Saída para Almoço</option>
@@ -72,12 +73,12 @@
             </select>
           </label>
         </div>
-        <button id="btnSalvarBatida" class="btn-primario">Lançar no Dia</button>
+        <button id="btnSalvarBatida" class="btn-primario">Lançar Batida & Salvar na Nuvem</button>
       </div>
 
-      <!-- Resumo Financeiro e Jornada -->
+      <!-- Resumo Financeiro e Horas -->
       <div class="card">
-        <h2>📊 Resumo do Mês</h2>
+        <h2>📊 Resumo do Período</h2>
         <div class="metricas-grid">
           <div class="metrica">
             <span>Horas Efetivas</span>
@@ -88,7 +89,7 @@
             <strong id="mHorasExtras">0h 00m</strong>
           </div>
           <div class="metrica">
-            <span>Valor Salário Base</span>
+            <span>Salário Base</span>
             <strong id="mValorBase">R$ 0,00</strong>
           </div>
           <div class="metrica">
@@ -100,13 +101,13 @@
             <strong id="mValorInsalubridade">R$ 0,00</strong>
           </div>
           <div class="metrica total">
-            <span>Remuneração Total Prevista</span>
+            <span>Remuneração Bruta Estimada</span>
             <strong id="mTotalEstimado">R$ 0,00</strong>
           </div>
         </div>
       </div>
 
-      <!-- Tabela por Dia -->
+      <!-- Tabela do Espelho com Links das Fotos -->
       <div class="card">
         <div class="tabela-header">
           <h2>Espelho de Ponto</h2>
@@ -123,6 +124,7 @@
                 <th>Saída</th>
                 <th>Total</th>
                 <th>Extras</th>
+                <th>Fotos</th>
                 <th></th>
               </tr>
             </thead>
@@ -132,11 +134,11 @@
       </div>
     </section>
 
-    <!-- ABA 2: CADASTRO E SALVAMENTO DA ESCALA -->
+    <!-- ABA 2: ESCALA DE HORÁRIOS -->
     <section id="abaEscala" class="aba-conteudo">
       <div class="card">
         <h2>📅 Horários Previstos da Escala</h2>
-        <p class="legenda">Defina sua escala padrão para cálculo de horas esperadas e lembretes automáticos.</p>
+        <p class="legenda">Configure os horários para cálculo de horas extras diárias e notificações automáticas 5 minutos antes.</p>
         <div class="form-grid">
           <label>Entrada Prevista:
             <input type="time" id="escEntrada" value="05:20" />
@@ -163,13 +165,14 @@
       <div class="card">
         <div class="cabecalho-secao">
           <h2>🍱 Solicitar Marmita</h2>
-          <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform"
-            target="_blank" class="btn-link">Abrir no Forms ↗</a>
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-link">Abrir em Nova Aba ↗</a>
         </div>
         <div class="iframe-container">
-          <iframe
-            src="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform?embedded=true"
-            width="100%" height="650" frameborder="0">Carregando formulário...</iframe>
+          <iframe 
+            src="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform?embedded=true" 
+            width="100%" 
+            height="650" 
+            frameborder="0">Carregando formulário...</iframe>
         </div>
       </div>
     </section>
@@ -177,7 +180,7 @@
     <!-- ABA 4: HORÁRIOS DE ÔNIBUS -->
     <section id="abaOnibus" class="aba-conteudo">
       <div class="card">
-        <h2>🚌 Horários dos Ônibus</h2>
+        <h2>🚌 Consulta de Linhas e Horários</h2>
         <div class="onibus-botoes">
           <button class="btn-tab-onibus active" onclick="mostrarFrameOnibus('situ')">SITU Jundiaí</button>
           <button class="btn-tab-onibus" onclick="mostrarFrameOnibus('rlc')">Rápido Luxo Campinas</button>
@@ -196,26 +199,19 @@
         <div id="boxRlc" class="frame-box" style="display: none;">
           <div class="cabecalho-secao">
             <span>Rápido Luxo Campinas</span>
-            <a href="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" target="_blank"
-              class="btn-link">Abrir Site Oficial ↗</a>
+            <a href="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" target="_blank" class="btn-link">Abrir Site Oficial ↗</a>
           </div>
           <div class="iframe-container">
-            <iframe src="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" width="100%"
-              height="580"></iframe>
+            <iframe src="https://www.rapidocampinas.com.br/servicos/linhas-e-horarios/" width="100%" height="580"></iframe>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ABA 5: CONFIGURAÇÕES SALARIAIS -->
+    <!-- ABA 5: CONFIGURAÇÕES E NUVEM -->
     <section id="abaConfig" class="aba-conteudo">
-      <label class="col-span-2">
-        URL da API Nuvem (Google Apps Script):
-        <input type="text" id="cfgApiNuvem"
-          placeholder="https://script.google.com/macros/s/AKfycbzTk_QPMWBHbNpagrSFKmk2O8r2Wenlm5ECRjK-lQlBJOShoLL9Z1HBusMpDBW0CWJJ/exec" />
-      </label>
       <div class="card">
-        <h2>⚙️ Parâmetros Financeiros</h2>
+        <h2>⚙️ Parâmetros Salariais & Nuvem</h2>
         <div class="form-grid">
           <label class="col-span-2">Forma de Remuneração:
             <select id="cfgTipoRemuneracao">
@@ -249,13 +245,33 @@
           <label>Salário Mínimo de Referência (R$):
             <input type="number" id="cfgSalarioMinimo" step="0.01" value="1412" />
           </label>
+          <label class="col-span-2">URL da API Nuvem (Google Apps Script):
+            <input type="text" id="cfgApiNuvem" />
+          </label>
         </div>
         <button id="btnSalvarConfig" class="btn-primario">Salvar Parâmetros</button>
+      </div>
+    </section>
+
+    <!-- ABA 6: BACKUP E EXPORTAÇÃO -->
+    <section id="abaBackup" class="aba-conteudo">
+      <div class="card">
+        <h2>💾 Backup & Exportar Dados</h2>
+        <p class="legenda">Gere cópias de segurança em arquivo ou exporte o espelho para planilhas do Excel:</p>
+        <div class="botoes-backup">
+          <button id="btnExportarCsv" class="btn-secundario">📊 Baixar Espelho para Excel (.CSV)</button>
+          <button id="btnExportarJson" class="btn-secundario">📥 Baixar Backup Completo (.JSON)</button>
+        </div>
+        <div style="margin-top: 18px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+          <h3>Restaurar Backup</h3>
+          <p class="legenda">Selecione um arquivo .JSON salvo para restaurar seus registros e configurações:</p>
+          <label for="inputRestaurarJson" class="btn-upload" style="background-color: #475569;">Selecionar Arquivo .JSON</label>
+          <input type="file" id="inputRestaurarJson" accept=".json" />
+        </div>
       </div>
     </section>
   </main>
 
   <script src="app.js"></script>
 </body>
-
 </html>

@@ -106,9 +106,9 @@ body {
   display: block;
 }
 
-/* CONTAINER E CARDS */
+/* CONTAINER & CARDS */
 .container {
-  max-width: 700px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 14px;
 }
@@ -203,12 +203,24 @@ input[type="file"] {
 
 .btn-primario {
   width: 100%;
-  padding: 11px;
+  padding: 12px;
   background-color: #10b981;
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-secundario {
+  width: 100%;
+  padding: 11px;
+  background-color: #334155;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
   font-weight: bold;
   cursor: pointer;
 }
@@ -227,16 +239,17 @@ input[type="file"] {
   background: none;
   border: none;
   color: #ef4444;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
 .status-msg {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   color: #0284c7;
   text-align: center;
-  min-height: 18px;
+  min-height: 20px;
   margin: 6px 0;
+  font-weight: 500;
 }
 
 /* MÉTRICAS */
@@ -281,7 +294,7 @@ input[type="file"] {
   color: #047857;
 }
 
-/* TABELA */
+/* TABELA DO ESPELHO */
 .tabela-header {
   display: flex;
   justify-content: space-between;
@@ -301,16 +314,33 @@ table {
 }
 
 th, td {
-  padding: 7px 5px;
+  padding: 8px 5px;
   border-bottom: 1px solid #e2e8f0;
 }
 
 th {
   background-color: #f8fafc;
   color: #475569;
+  font-weight: 600;
 }
 
-/* BOTÕES DE ÔNIBUS & IFRAME */
+.links-fotos-grid {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.badge-foto {
+  text-decoration: none;
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: bold;
+}
+
+/* BOTÕES ÔNIBUS & BACKUP */
 .onibus-botoes {
   display: flex;
   gap: 8px;
@@ -351,4 +381,11 @@ th {
   color: #2563eb;
   text-decoration: none;
   font-weight: bold;
+}
+
+.botoes-backup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
 }
