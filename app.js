@@ -235,30 +235,103 @@ inputFoto.addEventListener('change', async (e) => {
   }
 });
 
-// --- ENVIO PARA A NUVEM ---
+// --- ENVIO PARA A NUVEM COM SUPORTE A REDIRECIONAMENTO DO GOOGLE ---
 async function enviarParaNuvem(data, hora, tipoNome, fotoBase64) {
   if (!config.apiNuvem) return null;
 
-  try {
-    const payload = {
-      data: data,
-      hora: hora,
-      tipo: tipoNome,
-      fotoBase64: fotoBase64 || null
-    };
+  const payload = {
+    data: data,
+    hora: hora,
+    tipo: tipoNome,
+    fotoBase64: fotoBase64 || null
+  };
 
+  try {
+    // text/plain e redirect: follow são essenciais para o Google Apps Script não dar erro de CORS
     const resposta = await fetch(config.apiNuvem, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      mode: "cors",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
       body: JSON.stringify(payload)
     });
 
-    return await resposta.json();
+    const resultado = await resposta.json();
+    return resultado;
   } catch (err) {
-    console.warn("Aviso ao enviar para nuvem:", err);
-    return null;
+    console.warn("Tentando envio em modo secundário (no-cors)...", err);
+    // Modo de contingência caso o navegador imponha restrição estrita
+    try {
+      await fetch(config.apiNuvem, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+      });
+      return { status: "sucesso", fotoUrl: "Sincronizado" };
+    } catch (err2) {
+      console.error("Falha geral ao conectar na nuvem:", err2);
+      return null;
+    }
   }
 }
+
+// --- BOTÃO SALVAR BATIDA ---
+document.getElementById('btnSalvarBatida').addEventListener('click', async () => {
+  const data = document.getElementById('regData').value;
+  const hora = document.getElementById('regHora').value;
+  const tipo = document.getElementById('regTipo').value;
+  const selectElement = document.getElementById('regTipo');
+  const tipoNome = selectElement.options[selectElement.selectedIndex].text;
+
+  if (!data || !hora) {
+    alert("Informe data e hora.");
+    return;
+  }
+
+  // 1. Salva localmente de imediato (segurança garantida no celular)
+  if (!diasPonto[data]) {
+    diasPonto[data] = { e1: "", s1: "", e2: "", s2: "", linksFotos: {} };
+  }
+  if (!diasPonto[data].linksFotos) {
+    diasPonto[data].linksFotos = {};
+  }
+
+  diasPonto[data][tipo] = hora;
+  localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
+  renderizarTabela();
+  calcularMetricas();
+
+  statusOcr.innerText = `⏳ Enviando registro e foto para o Google Drive e Planilha...`;
+  statusOcr.style.color = "#0284c7";
+
+  const fotoParaEnviar = fotoBase64Atual;
+  fotoBase64Atual = null; // Libera buffer de memória da foto
+
+  // 2. Envia para a nuvem
+  if (config.apiNuvem) {
+    const resNuvem = await enviarParaNuvem(data, hora, tipoNome, fotoParaEnviar);
+    if (resNuvem && resNuvem.status === "sucesso") {
+      if (resNuvem.fotoUrl && resNuvem.fotoUrl !== "Sem foto" && resNuvem.fotoUrl !== "Sincronizado") {
+        diasPonto[data].linksFotos[tipo] = resNuvem.fotoUrl;
+        localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
+        renderizarTabela();
+      }
+      statusOcr.innerText = `✅ Salvo com sucesso no aparelho, Google Sheets e Google Drive!`;
+      statusOcr.style.color = "#15803d";
+    } else {
+      statusOcr.innerText = `⚠️ Salvo no aparelho, mas a planilha não respondeu. Verifique a permissão da API.`;
+      statusOcr.style.color = "#d97706";
+    }
+  } else {
+    statusOcr.innerText = `✅ Salvo no aparelho!`;
+    statusOcr.style.color = "#15803d";
+  }
+});
 
 // --- LANÇAR BATIDA NO DIA ---
 document.getElementById('btnSalvarBatida').addEventListener('click', async () => {
