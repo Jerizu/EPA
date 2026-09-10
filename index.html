@@ -15,7 +15,6 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-  <!-- Banner Flutuante de Alerta em Tela -->
   <div id="bannerAlerta">
     <strong id="bannerTitulo">⏱️ Lembrete de Ponto</strong>
     <p id="bannerCorpo">Horário da sua batida de ponto se aproximando.</p>
@@ -44,6 +43,7 @@
   <div id="overlay" class="overlay"></div>
 
   <main class="container">
+    <!-- ABA 1: REGISTRO DE PONTO -->
     <section id="abaPonto" class="aba-conteudo active">
       <div class="card card-lembrete">
         <div>
@@ -116,7 +116,7 @@
       <div class="card">
         <div class="tabela-header">
           <h2>Espelho de Ponto</h2>
-          <button id="btnLimparTudo" class="btn-perigo">Limpar Tudo (Aparelho e Nuvem)</button>
+          <button id="btnLimparTudo" class="btn-perigo">Limpar Tudo</button>
         </div>
         <div class="tabela-responsiva">
           <table id="tabelaEspelho">
@@ -139,6 +139,7 @@
       </div>
     </section>
 
+    <!-- ABA 2: ESCALA DE HORÁRIOS -->
     <section id="abaEscala" class="aba-conteudo">
       <div class="card">
         <h2>📅 Horários Previstos da Escala</h2>
@@ -160,10 +161,11 @@
             <input type="number" id="escCargaDia" step="0.1" value="8.0" />
           </label>
         </div>
-        <button id="btnSalvarEscala" class="btn-primario">Salvar Horários da Escala</button>
+        <button id="btnSalvarEscala" class="btn-primario">Salvar Escala (Site & Planilha)</button>
       </div>
     </section>
 
+    <!-- ABA 3: PEDIR MARMITA -->
     <section id="abaMarmita" class="aba-conteudo">
       <div class="card">
         <div class="cabecalho-secao">
@@ -180,6 +182,7 @@
       </div>
     </section>
 
+    <!-- ABA 4: ÔNIBUS -->
     <section id="abaOnibus" class="aba-conteudo">
       <div class="card">
         <h2>🚌 Consulta de Linhas e Horários</h2>
@@ -210,6 +213,7 @@
       </div>
     </section>
 
+    <!-- ABA 5: CONFIGURAÇÕES E SALÁRIO -->
     <section id="abaConfig" class="aba-conteudo">
       <div class="card">
         <h2>⚙️ Parâmetros Salariais & Nuvem</h2>
@@ -249,22 +253,30 @@
           <label class="col-span-2">URL da API Nuvem (Google Apps Script):
             <input type="text" id="cfgApiNuvem" />
           </label>
+          <label class="col-span-2">Ação ao Clicar na Lixeira (🗑️):
+            <select id="cfgModoExclusao">
+              <option value="inativar_dia" selected>Colocar como Status: INATIVO na planilha</option>
+              <option value="excluir_dia">Excluir linha definitivamente da planilha</option>
+            </select>
+          </label>
         </div>
-        <button id="btnSalvarConfig" class="btn-primario">Salvar Parâmetros</button>
+        <button id="btnSalvarConfig" class="btn-primario">Salvar Parâmetros (Site & Planilha)</button>
+        <button id="btnPuxarDaNuvem" class="btn-secundario" style="margin-top: 10px;">☁️ Puxar Escala e Salário Salvos na Planilha</button>
       </div>
     </section>
 
+    <!-- ABA 6: BACKUP E EXPORTAÇÃO -->
     <section id="abaBackup" class="aba-conteudo">
       <div class="card">
         <h2>💾 Backup & Exportar Dados</h2>
-        <p class="legenda">Gere cópias de segurança em arquivo ou exporte o espelho para planilhas do Excel:</p>
+        <p class="legenda">Gere cópias de segurança em arquivo ou exporte o espelho para o Excel:</p>
         <div class="botoes-backup">
           <button id="btnExportarCsv" class="btn-secundario">📊 Baixar Espelho para Excel (.CSV)</button>
           <button id="btnExportarJson" class="btn-secundario">📥 Baixar Backup Completo (.JSON)</button>
         </div>
         <div style="margin-top: 18px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
           <h3>Restaurar Backup</h3>
-          <p class="legenda">Selecione um arquivo .JSON salvo para restaurar seus registros e configurações:</p>
+          <p class="legenda">Selecione um arquivo .JSON para restaurar seus dados:</p>
           <label for="inputRestaurarJson" class="btn-upload" style="background-color: #475569;">Selecionar Arquivo .JSON</label>
           <input type="file" id="inputRestaurarJson" accept=".json" />
         </div>

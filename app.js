@@ -31,11 +31,15 @@ let config = JSON.parse(localStorage.getItem('ponto_config') || JSON.stringify({
   grauInsalubridade: 20,
   baseInsalubridade: "minimo",
   salarioMinimo: 1412,
+  modoExclusao: "inativar_dia", // "inativar_dia" ou "excluir_dia"
   apiNuvem: "https://script.google.com/macros/s/AKfycbzTk_QPMWBHbNpagrSFKmk2O8r2Wenlm5ECRjK-lQlBJOShoLL9Z1HBusMpDBW0CWJJ/exec"
 }));
 
 if (!config.apiNuvem) {
   config.apiNuvem = "https://script.google.com/macros/s/AKfycbzTk_QPMWBHbNpagrSFKmk2O8r2Wenlm5ECRjK-lQlBJOShoLL9Z1HBusMpDBW0CWJJ/exec";
+}
+if (!config.modoExclusao) {
+  config.modoExclusao = "inativar_dia";
 }
 
 let notificacoesEnviadas = JSON.parse(localStorage.getItem('ponto_notif_log') || '{}');
@@ -56,6 +60,7 @@ function carregarValores() {
   document.getElementById('cfgBaseInsalubridade').value = config.baseInsalubridade;
   document.getElementById('cfgSalarioMinimo').value = config.salarioMinimo;
   document.getElementById('cfgApiNuvem').value = config.apiNuvem;
+  document.getElementById('cfgModoExclusao').value = config.modoExclusao;
 
   ajustarExibicaoCargaMensal();
   atualizarStatusBotaoNotif();
@@ -234,7 +239,7 @@ inputFoto.addEventListener('change', async (e) => {
   }
 });
 
-// --- COMUNICAÇÃO COM A NUVEM (ENVIO E EXCLUSÃO) ---
+// --- COMUNICAÇÃO COM A PLANILHA (POST E GET) ---
 async function enviarParaNuvem(payload) {
   if (!config.apiNuvem) return null;
 
@@ -248,7 +253,7 @@ async function enviarParaNuvem(payload) {
     });
     return await resposta.json();
   } catch (err) {
-    console.warn("Tentando fallback de requisição:", err);
+    console.warn("Fallback post:", err);
     try {
       await fetch(config.apiNuvem, {
         method: "POST",
@@ -261,6 +266,34 @@ async function enviarParaNuvem(payload) {
       console.error("Falha ao comunicar com Google Apps Script:", e2);
       return null;
     }
+  }
+}
+
+// Puxar configurações salvas na planilha
+async function puxarConfigsDaPlanilha() {
+  if (!config.apiNuvem) return;
+  statusOcr.innerText = "⏳ Buscando escala e salário salvos na planilha...";
+  statusOcr.style.color = "#0284c7";
+
+  try {
+    const res = await fetch(config.apiNuvem);
+    const json = await res.json();
+    if (json && json.status === "sucesso" && json.configs) {
+      if (json.configs.escala) {
+        escala = Object.assign(escala, json.configs.escala);
+        localStorage.setItem('ponto_escala', JSON.stringify(escala));
+      }
+      if (json.configs.salario) {
+        config = Object.assign(config, json.configs.salario);
+        localStorage.setItem('ponto_config', JSON.stringify(config));
+      }
+      carregarValores();
+      calcularMetricas();
+      statusOcr.innerText = "✅ Escala e parâmetros salariais sincronizados da planilha!";
+      statusOcr.style.color = "#15803d";
+    }
+  } catch (e) {
+    console.warn("Não foi possível sincronizar da nuvem:", e);
   }
 }
 
@@ -289,7 +322,7 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
   renderizarTabela();
   calcularMetricas();
 
-  statusOcr.innerText = `⏳ Enviando registro e foto para o Google Drive e Planilha...`;
+  statusOcr.innerText = `⏳ Enviando registro e foto para a planilha e Google Drive...`;
   statusOcr.style.color = "#0284c7";
 
   const fotoParaEnviar = fotoBase64Atual;
@@ -321,10 +354,12 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
   }
 });
 
-// --- EXCLUIR REGISTROS DO APARELHO E DA NUVEM ---
+// --- EXCLUIR OU INATIVAR NA PLANILHA E APARELHO ---
 window.excluirDia = async function(data) {
   const dataFmt = data.split('-').reverse().join('/');
-  if (!confirm(`Deseja realmente excluir os registros do dia ${dataFmt} do aparelho e também da planilha/nuvem?`)) {
+  const acaoTexto = config.modoExclusao === 'inativar_dia' ? "colocar como STATUS: INATIVO na planilha" : "EXCLUIR a linha da planilha";
+  
+  if (!confirm(`Deseja retirar o dia ${dataFmt} do espelho e ${acaoTexto}?`)) {
     return;
   }
 
@@ -333,23 +368,23 @@ window.excluirDia = async function(data) {
   renderizarTabela();
   calcularMetricas();
 
-  statusOcr.innerText = `⏳ Excluindo registros de ${dataFmt} da nuvem...`;
+  statusOcr.innerText = `⏳ Atualizando status do dia ${dataFmt} na planilha...`;
   statusOcr.style.color = "#0284c7";
 
   if (config.apiNuvem) {
-    const res = await enviarParaNuvem({ acao: "excluir_dia", data: data });
+    const res = await enviarParaNuvem({ acao: config.modoExclusao, data: data });
     if (res && res.status === "sucesso") {
-      statusOcr.innerText = `🗑️ Dia ${dataFmt} apagado do aparelho e da nuvem!`;
+      statusOcr.innerText = `🗑️ Dia ${dataFmt} removido do espelho e atualizado na planilha!`;
       statusOcr.style.color = "#15803d";
     } else {
-      statusOcr.innerText = `Apagado do aparelho (verifique se apagou da planilha).`;
+      statusOcr.innerText = `Removido do espelho local (verifique a planilha).`;
       statusOcr.style.color = "#d97706";
     }
   }
 };
 
 document.getElementById('btnLimparTudo').addEventListener('click', async () => {
-  if (!confirm("ATENÇÃO: Deseja apagar TODOS os registros do aparelho e de toda a planilha na nuvem?")) {
+  if (!confirm("ATENÇÃO: Deseja apagar TODOS os registros do espelho e limpar as batidas da planilha?")) {
     return;
   }
 
@@ -358,18 +393,35 @@ document.getElementById('btnLimparTudo').addEventListener('click', async () => {
   renderizarTabela();
   calcularMetricas();
 
-  statusOcr.innerText = `⏳ Limpando planilha na nuvem...`;
+  statusOcr.innerText = `⏳ Limpando batidas na planilha...`;
   statusOcr.style.color = "#0284c7";
 
   if (config.apiNuvem) {
     await enviarParaNuvem({ acao: "limpar_tudo" });
-    statusOcr.innerText = `🗑️ Todos os dados foram limpos do aparelho e da nuvem!`;
+    statusOcr.innerText = `🗑️ Todos os dados foram limpos do aparelho e da planilha!`;
     statusOcr.style.color = "#15803d";
   }
 });
 
-// --- CONFIGURAÇÕES E ESCALA ---
-document.getElementById('btnSalvarEscala').addEventListener('click', () => {
+// --- SINCRONIZAR ESCALA & CONFIGURAÇÕES COM A PLANILHA ---
+async function sincronizarConfigComPlanilha() {
+  if (!config.apiNuvem) return;
+  await enviarParaNuvem({
+    acao: "salvar_config",
+    escala: escala,
+    salario: {
+      tipoRemuneracao: config.tipoRemuneracao,
+      valorSalario: config.valorSalario,
+      cargaMensal: config.cargaMensal,
+      adicionalHE: config.adicionalHE,
+      grauInsalubridade: config.grauInsalubridade,
+      baseInsalubridade: config.baseInsalubridade,
+      salarioMinimo: config.salarioMinimo
+    }
+  });
+}
+
+document.getElementById('btnSalvarEscala').addEventListener('click', async () => {
   escala = {
     entrada: document.getElementById('escEntrada').value,
     almocoSaida: document.getElementById('escAlmocoSaida').value,
@@ -379,10 +431,16 @@ document.getElementById('btnSalvarEscala').addEventListener('click', () => {
   };
   localStorage.setItem('ponto_escala', JSON.stringify(escala));
   calcularMetricas();
-  alert("Horários da escala salvos!");
+
+  statusOcr.innerText = "⏳ Salvando horários da escala na planilha...";
+  statusOcr.style.color = "#0284c7";
+  await sincronizarConfigComPlanilha();
+  statusOcr.innerText = "✅ Escala salva no aparelho e na planilha (aba 'Configuracoes')!";
+  statusOcr.style.color = "#15803d";
+  alert("Horários da escala salvos no aparelho e na planilha Google!");
 });
 
-document.getElementById('btnSalvarConfig').addEventListener('click', () => {
+document.getElementById('btnSalvarConfig').addEventListener('click', async () => {
   config = {
     tipoRemuneracao: document.getElementById('cfgTipoRemuneracao').value,
     valorSalario: parseFloat(document.getElementById('cfgValorSalario').value) || 0,
@@ -391,12 +449,21 @@ document.getElementById('btnSalvarConfig').addEventListener('click', () => {
     grauInsalubridade: parseFloat(document.getElementById('cfgGrauInsalubridade').value) || 0,
     baseInsalubridade: document.getElementById('cfgBaseInsalubridade').value,
     salarioMinimo: parseFloat(document.getElementById('cfgSalarioMinimo').value) || 1412,
+    modoExclusao: document.getElementById('cfgModoExclusao').value,
     apiNuvem: document.getElementById('cfgApiNuvem').value.trim()
   };
   localStorage.setItem('ponto_config', JSON.stringify(config));
   calcularMetricas();
-  alert("Configurações salvas!");
+
+  statusOcr.innerText = "⏳ Salvando parâmetros salariais na planilha...";
+  statusOcr.style.color = "#0284c7";
+  await sincronizarConfigComPlanilha();
+  statusOcr.innerText = "✅ Parâmetros salvos no aparelho e na planilha!";
+  statusOcr.style.color = "#15803d";
+  alert("Parâmetros salariais salvos no aparelho e na planilha Google!");
 });
+
+document.getElementById('btnPuxarDaNuvem').addEventListener('click', puxarConfigsDaPlanilha);
 
 // --- CÁLCULO E RENDERIZAÇÃO DO ESPELHO ---
 function timeToMinutes(t) {
@@ -462,7 +529,7 @@ function renderizarTabela() {
       <td><strong>${minToHoursStr(minutosTrabalhados)}</strong></td>
       <td style="color:${minutosExtras > 0 ? '#16a34a' : '#64748b'}">${minToHoursStr(minutosExtras)}</td>
       <td>${fotosHtml}</td>
-      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Excluir do aparelho e da nuvem">🗑️</button></td>
+      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Retirar e atualizar status na planilha">🗑️</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -574,19 +641,17 @@ document.getElementById('inputRestaurarJson').addEventListener('change', (e) => 
   reader.readAsText(file);
 });
 
-// --- MOTOR DE NOTIFICAÇÕES (MOBILE, BANNER VISUAL E VIBRAÇÃO) ---
+// --- MOTOR DE NOTIFICAÇÕES (MOBILE, BANNER E SOM) ---
 function exibirBannerNaTela(titulo, corpo) {
   const banner = document.getElementById('bannerAlerta');
   document.getElementById('bannerTitulo').innerText = titulo;
   document.getElementById('bannerCorpo').innerText = corpo;
   banner.style.display = 'block';
 
-  // Vibração nativa do celular (Android)
   if (navigator.vibrate) {
     navigator.vibrate([250, 100, 250, 100, 250]);
   }
 
-  // Toca o som de alerta
   tocarAlertaSonoro();
 
   setTimeout(() => {
@@ -642,17 +707,15 @@ function atualizarStatusBotaoNotif() {
   }
 }
 
-// Botão Ativar Notificações com suporte universal
 document.getElementById('btnPermissaoNotif').addEventListener('click', async () => {
   tocarAlertaSonoro();
 
   if (!("Notification" in window)) {
-    exibirBannerNaTela("🔔 Alertas Ativados!", "Alertas visuais e sonoros estão configurados neste aparelho.");
+    exibirBannerNaTela("🔔 Alertas Ativados!", "Alertas visuais e sonoros configurados neste aparelho.");
     return;
   }
 
   try {
-    // Compatibilidade com callbacks antigos e Promises modernas
     let perm;
     if (Notification.requestPermission.length === 0) {
       perm = await Notification.requestPermission();
@@ -674,7 +737,6 @@ document.getElementById('btnPermissaoNotif').addEventListener('click', async () 
 });
 
 async function dispararNotificacao(titulo, corpo) {
-  // Sempre mostra o banner visual e vibra
   exibirBannerNaTela(titulo, corpo);
 
   if (!("Notification" in window) || Notification.permission !== "granted") {
@@ -774,3 +836,4 @@ window.mostrarFrameOnibus = function(tipo) {
 carregarValores();
 renderizarTabela();
 calcularMetricas();
+puxarConfigsDaPlanilha();
