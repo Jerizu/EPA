@@ -4,19 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Controle de Ponto & Rotina</title>
+  
+  <!-- PWA & Mobile Icons -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PontoApp" />
+
   <link rel="stylesheet" href="style.css" />
   <!-- Tesseract.js v5 -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-  <!-- Cabeçalho Principal -->
   <header class="navbar">
     <button id="btnMenu" class="btn-icone" aria-label="Abrir Menu">☰</button>
     <h1>Controle de Ponto</h1>
     <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-marmita">🍱 Marmita</a>
   </header>
 
-  <!-- Gaveta Lateral de Navegação -->
   <nav id="menuLateral" class="drawer">
     <div class="drawer-header">
       <h3>Menu</h3>
@@ -34,18 +40,15 @@
   <div id="overlay" class="overlay"></div>
 
   <main class="container">
-    <!-- ABA 1: REGISTRO DE PONTO E ESPELHO -->
     <section id="abaPonto" class="aba-conteudo active">
-      <!-- Lembrete de Notificações -->
       <div class="card card-lembrete">
         <div>
           <strong>Lembretes Automáticos</strong>
-          <p>Avisos 5 min antes da batida e sextas às 15h para a marmita.</p>
+          <p id="txtStatusNotif">Avisos 5 min antes da batida e sextas às 15h para marmita.</p>
         </div>
         <button id="btnPermissaoNotif" class="btn-secundario-pequeno">Ativar</button>
       </div>
 
-      <!-- Scanner OCR & Câmera -->
       <div class="card">
         <h2>📸 Escanear Comprovante</h2>
         <div class="upload-area">
@@ -76,7 +79,6 @@
         <button id="btnSalvarBatida" class="btn-primario">Lançar Batida & Salvar na Nuvem</button>
       </div>
 
-      <!-- Resumo Financeiro e Horas -->
       <div class="card">
         <h2>📊 Resumo do Período</h2>
         <div class="metricas-grid">
@@ -107,7 +109,6 @@
         </div>
       </div>
 
-      <!-- Tabela do Espelho com Links das Fotos -->
       <div class="card">
         <div class="tabela-header">
           <h2>Espelho de Ponto</h2>
@@ -134,11 +135,10 @@
       </div>
     </section>
 
-    <!-- ABA 2: ESCALA DE HORÁRIOS -->
     <section id="abaEscala" class="aba-conteudo">
       <div class="card">
         <h2>📅 Horários Previstos da Escala</h2>
-        <p class="legenda">Configure os horários para cálculo de horas extras diárias e notificações automáticas 5 minutos antes.</p>
+        <p class="legenda">Configure os horários para cálculo de extras e lembretes automáticos 5 minutos antes.</p>
         <div class="form-grid">
           <label>Entrada Prevista:
             <input type="time" id="escEntrada" value="05:20" />
@@ -160,7 +160,6 @@
       </div>
     </section>
 
-    <!-- ABA 3: PEDIR MARMITA -->
     <section id="abaMarmita" class="aba-conteudo">
       <div class="card">
         <div class="cabecalho-secao">
@@ -177,7 +176,6 @@
       </div>
     </section>
 
-    <!-- ABA 4: HORÁRIOS DE ÔNIBUS -->
     <section id="abaOnibus" class="aba-conteudo">
       <div class="card">
         <h2>🚌 Consulta de Linhas e Horários</h2>
@@ -208,7 +206,6 @@
       </div>
     </section>
 
-    <!-- ABA 5: CONFIGURAÇÕES E NUVEM -->
     <section id="abaConfig" class="aba-conteudo">
       <div class="card">
         <h2>⚙️ Parâmetros Salariais & Nuvem</h2>
@@ -253,7 +250,6 @@
       </div>
     </section>
 
-    <!-- ABA 6: BACKUP E EXPORTAÇÃO -->
     <section id="abaBackup" class="aba-conteudo">
       <div class="card">
         <h2>💾 Backup & Exportar Dados</h2>
