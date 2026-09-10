@@ -1,4 +1,4 @@
-// --- REGISTRO DO SERVICE WORKER (OBRIGATÓRIO PARA NOTIFICAÇÃO NO CELULAR) ---
+// --- REGISTRO DO SERVICE WORKER ---
 let swRegistration = null;
 
 if ('serviceWorker' in navigator) {
@@ -7,12 +7,12 @@ if ('serviceWorker' in navigator) {
       swRegistration = await navigator.serviceWorker.register('./sw.js');
       console.log("Service Worker registrado com sucesso!");
     } catch (err) {
-      console.warn("Falha ao registrar Service Worker:", err);
+      console.warn("Falha no Service Worker:", err);
     }
   });
 }
 
-// --- ESTADO & CONFIGURAÇÕES INICIAIS ---
+// --- ESTADO & CONFIGURAÇÕES ---
 let diasPonto = JSON.parse(localStorage.getItem('ponto_dias') || '{}');
 
 let escala = JSON.parse(localStorage.getItem('ponto_escala') || JSON.stringify({
@@ -41,7 +41,6 @@ if (!config.apiNuvem) {
 let notificacoesEnviadas = JSON.parse(localStorage.getItem('ponto_notif_log') || '{}');
 let fotoBase64Atual = null;
 
-// --- CARREGAR CONFIGURAÇÕES EM TELA ---
 function carregarValores() {
   document.getElementById('escEntrada').value = escala.entrada;
   document.getElementById('escAlmocoSaida').value = escala.almocoSaida;
@@ -101,7 +100,7 @@ navLinks.forEach(link => {
   });
 });
 
-// --- PRÉ-PROCESSAMENTO DE IMAGEM & OCR ---
+// --- PRÉ-PROCESSAMENTO & OCR ---
 function processarImagemCanvas(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -225,7 +224,7 @@ inputFoto.addEventListener('change', async (e) => {
       statusOcr.innerText = `✅ Reconhecido! Data (${dataDetectada.split('-').reverse().join('/')}) e Hora (${horaDetectada}).`;
       statusOcr.style.color = "#15803d";
     } else {
-      statusOcr.innerText = `⚠️ Leitura parcial. Confira a data e hora nos campos abaixo.`;
+      statusOcr.innerText = `⚠️ Leitura parcial. Confira data e hora nos campos.`;
       statusOcr.style.color = "#d97706";
     }
   } catch (err) {
@@ -235,103 +234,35 @@ inputFoto.addEventListener('change', async (e) => {
   }
 });
 
-// --- ENVIO PARA A NUVEM COM SUPORTE A REDIRECIONAMENTO DO GOOGLE ---
-async function enviarParaNuvem(data, hora, tipoNome, fotoBase64) {
+// --- COMUNICAÇÃO COM A NUVEM (ENVIO E EXCLUSÃO) ---
+async function enviarParaNuvem(payload) {
   if (!config.apiNuvem) return null;
 
-  const payload = {
-    data: data,
-    hora: hora,
-    tipo: tipoNome,
-    fotoBase64: fotoBase64 || null
-  };
-
   try {
-    // text/plain e redirect: follow são essenciais para o Google Apps Script não dar erro de CORS
     const resposta = await fetch(config.apiNuvem, {
       method: "POST",
       mode: "cors",
       redirect: "follow",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     });
-
-    const resultado = await resposta.json();
-    return resultado;
+    return await resposta.json();
   } catch (err) {
-    console.warn("Tentando envio em modo secundário (no-cors)...", err);
-    // Modo de contingência caso o navegador imponha restrição estrita
+    console.warn("Tentando fallback de requisição:", err);
     try {
       await fetch(config.apiNuvem, {
         method: "POST",
         mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(payload)
       });
-      return { status: "sucesso", fotoUrl: "Sincronizado" };
-    } catch (err2) {
-      console.error("Falha geral ao conectar na nuvem:", err2);
+      return { status: "sucesso" };
+    } catch (e2) {
+      console.error("Falha ao comunicar com Google Apps Script:", e2);
       return null;
     }
   }
 }
-
-// --- BOTÃO SALVAR BATIDA ---
-document.getElementById('btnSalvarBatida').addEventListener('click', async () => {
-  const data = document.getElementById('regData').value;
-  const hora = document.getElementById('regHora').value;
-  const tipo = document.getElementById('regTipo').value;
-  const selectElement = document.getElementById('regTipo');
-  const tipoNome = selectElement.options[selectElement.selectedIndex].text;
-
-  if (!data || !hora) {
-    alert("Informe data e hora.");
-    return;
-  }
-
-  // 1. Salva localmente de imediato (segurança garantida no celular)
-  if (!diasPonto[data]) {
-    diasPonto[data] = { e1: "", s1: "", e2: "", s2: "", linksFotos: {} };
-  }
-  if (!diasPonto[data].linksFotos) {
-    diasPonto[data].linksFotos = {};
-  }
-
-  diasPonto[data][tipo] = hora;
-  localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
-  renderizarTabela();
-  calcularMetricas();
-
-  statusOcr.innerText = `⏳ Enviando registro e foto para o Google Drive e Planilha...`;
-  statusOcr.style.color = "#0284c7";
-
-  const fotoParaEnviar = fotoBase64Atual;
-  fotoBase64Atual = null; // Libera buffer de memória da foto
-
-  // 2. Envia para a nuvem
-  if (config.apiNuvem) {
-    const resNuvem = await enviarParaNuvem(data, hora, tipoNome, fotoParaEnviar);
-    if (resNuvem && resNuvem.status === "sucesso") {
-      if (resNuvem.fotoUrl && resNuvem.fotoUrl !== "Sem foto" && resNuvem.fotoUrl !== "Sincronizado") {
-        diasPonto[data].linksFotos[tipo] = resNuvem.fotoUrl;
-        localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
-        renderizarTabela();
-      }
-      statusOcr.innerText = `✅ Salvo com sucesso no aparelho, Google Sheets e Google Drive!`;
-      statusOcr.style.color = "#15803d";
-    } else {
-      statusOcr.innerText = `⚠️ Salvo no aparelho, mas a planilha não respondeu. Verifique a permissão da API.`;
-      statusOcr.style.color = "#d97706";
-    }
-  } else {
-    statusOcr.innerText = `✅ Salvo no aparelho!`;
-    statusOcr.style.color = "#15803d";
-  }
-});
 
 // --- LANÇAR BATIDA NO DIA ---
 document.getElementById('btnSalvarBatida').addEventListener('click', async () => {
@@ -358,33 +289,86 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
   renderizarTabela();
   calcularMetricas();
 
-  statusOcr.innerText = `Salvando no aparelho e enviando para a nuvem...`;
+  statusOcr.innerText = `⏳ Enviando registro e foto para o Google Drive e Planilha...`;
   statusOcr.style.color = "#0284c7";
 
   const fotoParaEnviar = fotoBase64Atual;
   fotoBase64Atual = null;
 
   if (config.apiNuvem) {
-    const resNuvem = await enviarParaNuvem(data, hora, tipoNome, fotoParaEnviar);
+    const resNuvem = await enviarParaNuvem({
+      data: data,
+      hora: hora,
+      tipo: tipoNome,
+      fotoBase64: fotoParaEnviar
+    });
+
     if (resNuvem && resNuvem.status === "sucesso") {
       if (resNuvem.fotoUrl && resNuvem.fotoUrl !== "Sem foto") {
         diasPonto[data].linksFotos[tipo] = resNuvem.fotoUrl;
         localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
         renderizarTabela();
       }
-      statusOcr.innerText = `✅ Salvo no aparelho, Google Sheets e Google Drive!`;
+      statusOcr.innerText = `✅ Salvo com sucesso no aparelho, Google Sheets e Google Drive!`;
       statusOcr.style.color = "#15803d";
     } else {
-      statusOcr.innerText = `✅ Salvo no aparelho! (Falha ao sincronizar com Google Sheets/Drive)`;
+      statusOcr.innerText = `✅ Salvo no aparelho! (Aguardando sincronização com a nuvem)`;
       statusOcr.style.color = "#d97706";
     }
   } else {
-    statusOcr.innerText = `✅ Salvo localmente no aparelho!`;
+    statusOcr.innerText = `✅ Salvo no aparelho!`;
     statusOcr.style.color = "#15803d";
   }
 });
 
-// --- SALVAR ESCALA & CONFIGURAÇÕES ---
+// --- EXCLUIR REGISTROS DO APARELHO E DA NUVEM ---
+window.excluirDia = async function(data) {
+  const dataFmt = data.split('-').reverse().join('/');
+  if (!confirm(`Deseja realmente excluir os registros do dia ${dataFmt} do aparelho e também da planilha/nuvem?`)) {
+    return;
+  }
+
+  delete diasPonto[data];
+  localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
+  renderizarTabela();
+  calcularMetricas();
+
+  statusOcr.innerText = `⏳ Excluindo registros de ${dataFmt} da nuvem...`;
+  statusOcr.style.color = "#0284c7";
+
+  if (config.apiNuvem) {
+    const res = await enviarParaNuvem({ acao: "excluir_dia", data: data });
+    if (res && res.status === "sucesso") {
+      statusOcr.innerText = `🗑️ Dia ${dataFmt} apagado do aparelho e da nuvem!`;
+      statusOcr.style.color = "#15803d";
+    } else {
+      statusOcr.innerText = `Apagado do aparelho (verifique se apagou da planilha).`;
+      statusOcr.style.color = "#d97706";
+    }
+  }
+};
+
+document.getElementById('btnLimparTudo').addEventListener('click', async () => {
+  if (!confirm("ATENÇÃO: Deseja apagar TODOS os registros do aparelho e de toda a planilha na nuvem?")) {
+    return;
+  }
+
+  diasPonto = {};
+  localStorage.removeItem('ponto_dias');
+  renderizarTabela();
+  calcularMetricas();
+
+  statusOcr.innerText = `⏳ Limpando planilha na nuvem...`;
+  statusOcr.style.color = "#0284c7";
+
+  if (config.apiNuvem) {
+    await enviarParaNuvem({ acao: "limpar_tudo" });
+    statusOcr.innerText = `🗑️ Todos os dados foram limpos do aparelho e da nuvem!`;
+    statusOcr.style.color = "#15803d";
+  }
+});
+
+// --- CONFIGURAÇÕES E ESCALA ---
 document.getElementById('btnSalvarEscala').addEventListener('click', () => {
   escala = {
     entrada: document.getElementById('escEntrada').value,
@@ -395,7 +379,7 @@ document.getElementById('btnSalvarEscala').addEventListener('click', () => {
   };
   localStorage.setItem('ponto_escala', JSON.stringify(escala));
   calcularMetricas();
-  alert("Horários da escala salvos com sucesso!");
+  alert("Horários da escala salvos!");
 });
 
 document.getElementById('btnSalvarConfig').addEventListener('click', () => {
@@ -412,24 +396,6 @@ document.getElementById('btnSalvarConfig').addEventListener('click', () => {
   localStorage.setItem('ponto_config', JSON.stringify(config));
   calcularMetricas();
   alert("Configurações salvas!");
-});
-
-window.excluirDia = function(data) {
-  if (confirm(`Excluir batidas do dia ${data.split('-').reverse().join('/')}?`)) {
-    delete diasPonto[data];
-    localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
-    renderizarTabela();
-    calcularMetricas();
-  }
-};
-
-document.getElementById('btnLimparTudo').addEventListener('click', () => {
-  if (confirm("Deseja apagar todos os registros do aparelho?")) {
-    diasPonto = {};
-    localStorage.removeItem('ponto_dias');
-    renderizarTabela();
-    calcularMetricas();
-  }
 });
 
 // --- CÁLCULO E RENDERIZAÇÃO DO ESPELHO ---
@@ -496,7 +462,7 @@ function renderizarTabela() {
       <td><strong>${minToHoursStr(minutosTrabalhados)}</strong></td>
       <td style="color:${minutosExtras > 0 ? '#16a34a' : '#64748b'}">${minToHoursStr(minutosExtras)}</td>
       <td>${fotosHtml}</td>
-      <td><button onclick="excluirDia('${data}')" class="btn-perigo">✕</button></td>
+      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Excluir do aparelho e da nuvem">🗑️</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -608,34 +574,57 @@ document.getElementById('inputRestaurarJson').addEventListener('change', (e) => 
   reader.readAsText(file);
 });
 
-// --- MOTOR DE NOTIFICAÇÕES (MOBILE SERVICE WORKER + FALLBACK AUDITIVO) ---
+// --- MOTOR DE NOTIFICAÇÕES (MOBILE, BANNER VISUAL E VIBRAÇÃO) ---
+function exibirBannerNaTela(titulo, corpo) {
+  const banner = document.getElementById('bannerAlerta');
+  document.getElementById('bannerTitulo').innerText = titulo;
+  document.getElementById('bannerCorpo').innerText = corpo;
+  banner.style.display = 'block';
+
+  // Vibração nativa do celular (Android)
+  if (navigator.vibrate) {
+    navigator.vibrate([250, 100, 250, 100, 250]);
+  }
+
+  // Toca o som de alerta
+  tocarAlertaSonoro();
+
+  setTimeout(() => {
+    banner.style.display = 'none';
+  }, 7000);
+}
+
 function tocarAlertaSonoro() {
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const audioCtx = new AudioContext();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
+
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15);
     gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.45);
+
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.4);
+    osc.stop(audioCtx.currentTime + 0.45);
   } catch (e) {
-    console.log("Áudio indisponível:", e);
+    console.log("Áudio bloqueado:", e);
   }
 }
 
 function atualizarStatusBotaoNotif() {
   const btn = document.getElementById('btnPermissaoNotif');
   const txt = document.getElementById('txtStatusNotif');
-  
+
   if (!("Notification" in window)) {
-    btn.innerText = "Indisponível";
-    btn.disabled = true;
-    txt.innerText = "Este navegador mobile requer instalação via 'Adicionar à Tela de Início'.";
+    btn.innerText = "Alertas Ativos";
+    btn.style.backgroundColor = "#10b981";
+    txt.innerText = "Alertas sonoros e visuais em tela estão ativos!";
     return;
   }
 
@@ -644,40 +633,49 @@ function atualizarStatusBotaoNotif() {
     btn.style.backgroundColor = "#10b981";
     txt.innerText = "Lembretes ativos! Avisos 5 min antes da batida e sextas às 15h.";
   } else if (Notification.permission === 'denied') {
-    btn.innerText = "Bloqueado";
-    btn.style.backgroundColor = "#ef4444";
-    txt.innerText = "As notificações foram bloqueadas nas configurações do navegador.";
+    btn.innerText = "Permissão Bloqueada";
+    btn.style.backgroundColor = "#d97706";
+    txt.innerText = "As notificações de sistema estão bloqueadas. Os alertas soarão em tela.";
   } else {
     btn.innerText = "Ativar";
     btn.style.backgroundColor = "#0284c7";
   }
 }
 
+// Botão Ativar Notificações com suporte universal
 document.getElementById('btnPermissaoNotif').addEventListener('click', async () => {
-  // Teste de som imediato no clique para desbloquear a AudioContext no mobile
   tocarAlertaSonoro();
 
   if (!("Notification" in window)) {
-    alert("Para ativar notificações neste celular:\n1. Toque no menu de opções do navegador (três pontinhos ou compartilhar)\n2. Escolha 'Adicionar à Tela de Início'\n3. Abra o app pelo ícone criado na tela.");
+    exibirBannerNaTela("🔔 Alertas Ativados!", "Alertas visuais e sonoros estão configurados neste aparelho.");
     return;
   }
 
   try {
-    const perm = await Notification.requestPermission();
+    // Compatibilidade com callbacks antigos e Promises modernas
+    let perm;
+    if (Notification.requestPermission.length === 0) {
+      perm = await Notification.requestPermission();
+    } else {
+      perm = await new Promise((resolve) => Notification.requestPermission(resolve));
+    }
+
     atualizarStatusBotaoNotif();
 
     if (perm === 'granted') {
-      dispararNotificacao("🔔 Lembretes Ativados!", "Notificações configuradas com sucesso.");
-    } else if (perm === 'denied') {
-      alert("As notificações estão desativadas para este site. Vá em: Configurações do Navegador > Notificações > Permitir para este site.");
+      dispararNotificacao("🔔 Lembretes Ativados!", "Você receberá avisos 5 minutos antes da escala e para a marmita.");
+    } else {
+      exibirBannerNaTela("🔔 Alertas em Tela Ativos!", "Como o aviso do sistema foi negado, o app exibirá alertas sonoros e visuais na tela.");
     }
   } catch (err) {
-    alert("Erro ao pedir permissão: " + err);
+    console.error("Erro ao pedir permissão:", err);
+    exibirBannerNaTela("🔔 Alertas Ativos!", "Alertas sonoros configurados com sucesso.");
   }
 });
 
 async function dispararNotificacao(titulo, corpo) {
-  tocarAlertaSonoro();
+  // Sempre mostra o banner visual e vibra
+  exibirBannerNaTela(titulo, corpo);
 
   if (!("Notification" in window) || Notification.permission !== "granted") {
     return;
@@ -686,25 +684,22 @@ async function dispararNotificacao(titulo, corpo) {
   const opcoes = {
     body: corpo,
     icon: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png",
-    badge: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png",
     vibrate: [200, 100, 200]
   };
 
-  // 1. Tenta disparar pelo Service Worker (padrão obrigatório no celular)
   if (swRegistration && swRegistration.showNotification) {
     try {
       await swRegistration.showNotification(titulo, opcoes);
       return;
     } catch (e) {
-      console.warn("Falha no showNotification via SW:", e);
+      console.warn("Erro no showNotification:", e);
     }
   }
 
-  // 2. Fallback para navegador desktop
   try {
     new Notification(titulo, opcoes);
   } catch (e) {
-    console.warn("Fallback de notificação desktop falhou:", e);
+    console.warn("Erro no new Notification:", e);
   }
 }
 
@@ -756,7 +751,7 @@ function verificarAgendamentosNotificacoes() {
 setInterval(verificarAgendamentosNotificacoes, 30000);
 verificarAgendamentosNotificacoes();
 
-// Alternância de Ônibus
+// Alternar Ônibus
 window.mostrarFrameOnibus = function(tipo) {
   const btnTabs = document.querySelectorAll('.btn-tab-onibus');
   const boxSitu = document.getElementById('boxSitu');
@@ -775,7 +770,7 @@ window.mostrarFrameOnibus = function(tipo) {
   }
 };
 
-// Inicialização Geral
+// Inicialização
 carregarValores();
 renderizarTabela();
 calcularMetricas();
