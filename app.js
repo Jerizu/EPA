@@ -5,9 +5,9 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       swRegistration = await navigator.serviceWorker.register('./sw.js');
-      console.log("Service Worker registrado com sucesso!");
+      console.log("Service Worker ativo!");
     } catch (err) {
-      console.warn("Falha no Service Worker:", err);
+      console.warn("Service Worker:", err);
     }
   });
 }
@@ -31,7 +31,7 @@ let config = JSON.parse(localStorage.getItem('ponto_config') || JSON.stringify({
   grauInsalubridade: 20,
   baseInsalubridade: "minimo",
   salarioMinimo: 1412,
-  modoExclusao: "inativar_dia", // "inativar_dia" ou "excluir_dia"
+  modoExclusao: "inativar_dia",
   apiNuvem: "https://script.google.com/macros/s/AKfycbzTk_QPMWBHbNpagrSFKmk2O8r2Wenlm5ECRjK-lQlBJOShoLL9Z1HBusMpDBW0CWJJ/exec"
 }));
 
@@ -46,21 +46,21 @@ let notificacoesEnviadas = JSON.parse(localStorage.getItem('ponto_notif_log') ||
 let fotoBase64Atual = null;
 
 function carregarValores() {
-  document.getElementById('escEntrada').value = escala.entrada;
-  document.getElementById('escAlmocoSaida').value = escala.almocoSaida;
-  document.getElementById('escAlmocoVolta').value = escala.almocoVolta;
-  document.getElementById('escSaida').value = escala.saida;
-  document.getElementById('escCargaDia').value = escala.cargaDia;
+  document.getElementById('escEntrada').value = escala.entrada || "05:20";
+  document.getElementById('escAlmocoSaida').value = escala.almocoSaida || "11:00";
+  document.getElementById('escAlmocoVolta').value = escala.almocoVolta || "12:00";
+  document.getElementById('escSaida').value = escala.saida || "14:40";
+  document.getElementById('escCargaDia').value = escala.cargaDia || 8.0;
 
-  document.getElementById('cfgTipoRemuneracao').value = config.tipoRemuneracao;
-  document.getElementById('cfgValorSalario').value = config.valorSalario;
-  document.getElementById('cfgCargaMensal').value = config.cargaMensal;
-  document.getElementById('cfgAdicionalHE').value = config.adicionalHE;
-  document.getElementById('cfgGrauInsalubridade').value = config.grauInsalubridade;
-  document.getElementById('cfgBaseInsalubridade').value = config.baseInsalubridade;
-  document.getElementById('cfgSalarioMinimo').value = config.salarioMinimo;
+  document.getElementById('cfgTipoRemuneracao').value = config.tipoRemuneracao || "mensal";
+  document.getElementById('cfgValorSalario').value = config.valorSalario || 3500;
+  document.getElementById('cfgCargaMensal').value = config.cargaMensal || 220;
+  document.getElementById('cfgAdicionalHE').value = config.adicionalHE || 50;
+  document.getElementById('cfgGrauInsalubridade').value = config.grauInsalubridade !== undefined ? config.grauInsalubridade : 20;
+  document.getElementById('cfgBaseInsalubridade').value = config.baseInsalubridade || "minimo";
+  document.getElementById('cfgSalarioMinimo').value = config.salarioMinimo || 1412;
   document.getElementById('cfgApiNuvem').value = config.apiNuvem;
-  document.getElementById('cfgModoExclusao').value = config.modoExclusao;
+  document.getElementById('cfgModoExclusao').value = config.modoExclusao || "inativar_dia";
 
   ajustarExibicaoCargaMensal();
   atualizarStatusBotaoNotif();
@@ -105,7 +105,7 @@ navLinks.forEach(link => {
   });
 });
 
-// --- PRÉ-PROCESSAMENTO & OCR ---
+// --- PRÉ-PROCESSAMENTO ROBUSTO PARA CANHOTO TÉRMICO ---
 function processarImagemCanvas(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -115,7 +115,8 @@ function processarImagemCanvas(file) {
         const canvas = document.getElementById('canvasPreProcess');
         const ctx = canvas.getContext('2d');
 
-        const maxDim = 1600;
+        // Escala para resolução otimizada
+        const maxDim = 1800;
         let w = img.width;
         let h = img.height;
         if (w > maxDim || h > maxDim) {
@@ -132,19 +133,32 @@ function processarImagemCanvas(file) {
         canvas.height = h;
         ctx.drawImage(img, 0, 0, w, h);
 
+        // Foto guardada para upload no Google Drive
         fotoBase64Atual = canvas.toDataURL('image/jpeg', 0.85);
 
+        // Aumento de contraste e normalização de tons de cinza
         const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
+
+        // Calcula média de luminosidade da imagem para binarização adaptativa
+        let somaLum = 0;
+        const totalPixels = d.length / 4;
         for (let i = 0; i < d.length; i += 4) {
-          const cinza = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          const v = cinza < 135 ? 0 : 255;
+          somaLum += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+        }
+        const mediaLum = somaLum / totalPixels;
+        // Limiar ajustado baseado na claridade média da cena
+        const threshold = Math.max(95, Math.min(160, mediaLum * 0.88));
+
+        for (let i = 0; i < d.length; i += 4) {
+          const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          const v = lum < threshold ? 0 : 255;
           d[i] = v;
           d[i + 1] = v;
           d[i + 2] = v;
         }
-        ctx.putImageData(imgData, 0, 0);
 
+        ctx.putImageData(imgData, 0, 0);
         resolve(canvas.toDataURL('image/png'));
       };
       img.src = event.target.result;
@@ -153,19 +167,29 @@ function processarImagemCanvas(file) {
   });
 }
 
+// --- EXTRATOR ROBUSTO DE DATA E HORA ---
 function extrairDataHoraTexto(rawText) {
-  let limpo = rawText.toUpperCase().replace(/\r\n/g, '\n');
+  // Normaliza o texto e remove quebras no meio de palavras
+  let limpo = rawText.toUpperCase();
+  
+  // Trata a quebra típica do canhoto: 'D' no final da linha e 'ATA:' no início da próxima
+  limpo = limpo.replace(/D\s*[\r\n]+\s*ATA/g, "DATA");
+  // Substitui caracteres comumente confundidos por OCR em fontes condensadas
+  limpo = limpo.replace(/OATA/g, "DATA").replace(/QATA/g, "DATA");
+
   let dataDetectada = null;
   let horaDetectada = null;
 
-  const regexDataComRotulo = /DATA\s*[:\.\-]?\s*(\d{2})[\/\.\-](\d{2})[\/\.\-](\d{4}|\d{2})/i;
-  const matchDataRotulo = limpo.match(regexDataComRotulo);
+  // 1. Procura DATA: DD/MM/AAAA ou ATA: DD/MM/AAAA
+  const regexData = /(?:D?ATA|DATA)?\s*[:\.\-]?\s*(\d{2})[\/\.\-](\d{2})[\/\.\-](20\d{2}|\d{2})/;
+  const matchData = limpo.match(regexData);
 
-  if (matchDataRotulo) {
-    let [_, dia, mes, ano] = matchDataRotulo;
+  if (matchData) {
+    let [_, dia, mes, ano] = matchData;
     if (ano.length === 2) ano = "20" + ano;
     dataDetectada = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
   } else {
+    // Procura qualquer sequência DD/MM/AAAA
     const matchDataSolta = limpo.match(/(\d{2})[\/\.-](\d{2})[\/\.-](20\d{2})/);
     if (matchDataSolta) {
       const [_, dia, mes, ano] = matchDataSolta;
@@ -173,17 +197,22 @@ function extrairDataHoraTexto(rawText) {
     }
   }
 
-  const regexHoraComRotulo = /HORA\s*[:\.\-]?\s*([0-2]?[0-9])[:\.\-]([0-5][0-9])/i;
-  const matchHoraRotulo = limpo.match(regexHoraComRotulo);
+  // 2. Procura HORA: HH:MM ou HORA. HH.MM
+  const regexHora = /HORA\s*[:\.\-]?\s*([0-2]?[0-9])[:\.\-]([0-5][0-9])/;
+  const matchHora = limpo.match(regexHora);
 
-  if (matchHoraRotulo) {
-    let [_, h, m] = matchHoraRotulo;
+  if (matchHora) {
+    let [_, h, m] = matchHora;
     horaDetectada = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
   } else {
+    // Busca qualquer padrão HH:MM válido
     const matchesHoras = [...limpo.matchAll(/\b([0-2]?[0-9])[:\.]([0-5][0-9])\b/g)];
     if (matchesHoras.length > 0) {
-      const ultimo = matchesHoras[matchesHoras.length - 1];
-      horaDetectada = `${ultimo[1].padStart(2, '0')}:${ultimo[2].padStart(2, '0')}`;
+      // No comprovante Control iD, o horário da batida fica mais para baixo
+      const item = matchesHoras.find(m => Number(m[1]) <= 23 && Number(m[2]) <= 59);
+      if (item) {
+        horaDetectada = `${item[1].padStart(2, '0')}:${item[2].padStart(2, '0')}`;
+      }
     }
   }
 
@@ -197,7 +226,7 @@ inputFoto.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  statusOcr.innerText = "⏳ Lendo comprovante e preparando foto...";
+  statusOcr.innerText = "⏳ Lendo comprovante e preparando imagem...";
   statusOcr.style.color = "#0284c7";
 
   try {
@@ -226,20 +255,23 @@ inputFoto.addEventListener('change', async (e) => {
     }
 
     if (dataDetectada && horaDetectada) {
-      statusOcr.innerText = `✅ Reconhecido! Data (${dataDetectada.split('-').reverse().join('/')}) e Hora (${horaDetectada}).`;
+      statusOcr.innerText = `✅ Reconhecido com sucesso! Data: ${dataDetectada.split('-').reverse().join('/')} | Hora: ${horaDetectada}`;
       statusOcr.style.color = "#15803d";
-    } else {
+    } else if (dataDetectada || horaDetectada) {
       statusOcr.innerText = `⚠️ Leitura parcial. Confira data e hora nos campos.`;
       statusOcr.style.color = "#d97706";
+    } else {
+      statusOcr.innerText = `⚠️ Não conseguimos ler os dados automaticamente. Digite nos campos abaixo.`;
+      statusOcr.style.color = "#b91c1c";
     }
   } catch (err) {
     console.error(err);
-    statusOcr.innerText = "Erro no leitor. Preencha os campos manualmente.";
+    statusOcr.innerText = "Erro no leitor de imagem. Digite nos campos manualmente.";
     statusOcr.style.color = "#b91c1c";
   }
 });
 
-// --- COMUNICAÇÃO COM A PLANILHA (POST E GET) ---
+// --- COMUNICAÇÃO COM A PLANILHA ---
 async function enviarParaNuvem(payload) {
   if (!config.apiNuvem) return null;
 
@@ -263,13 +295,13 @@ async function enviarParaNuvem(payload) {
       });
       return { status: "sucesso" };
     } catch (e2) {
-      console.error("Falha ao comunicar com Google Apps Script:", e2);
+      console.error("Falha na nuvem:", e2);
       return null;
     }
   }
 }
 
-// Puxar configurações salvas na planilha
+// Puxar configurações da planilha (com proteção contra valores em branco)
 async function puxarConfigsDaPlanilha() {
   if (!config.apiNuvem) return;
   statusOcr.innerText = "⏳ Buscando escala e salário salvos na planilha...";
@@ -279,21 +311,46 @@ async function puxarConfigsDaPlanilha() {
     const res = await fetch(config.apiNuvem);
     const json = await res.json();
     if (json && json.status === "sucesso" && json.configs) {
+      let dadosEncontrados = false;
+
+      // Só atualiza campos que realmente tiverem valor válido
       if (json.configs.escala) {
-        escala = Object.assign(escala, json.configs.escala);
+        const escNu = json.configs.escala;
+        if (escNu.entrada) { escala.entrada = escNu.entrada; dadosEncontrados = true; }
+        if (escNu.almocoSaida) { escala.almocoSaida = escNu.almocoSaida; dadosEncontrados = true; }
+        if (escNu.almocoVolta) { escala.almocoVolta = escNu.almocoVolta; dadosEncontrados = true; }
+        if (escNu.saida) { escala.saida = escNu.saida; dadosEncontrados = true; }
+        if (escNu.cargaDia) { escala.cargaDia = Number(escNu.cargaDia); dadosEncontrados = true; }
         localStorage.setItem('ponto_escala', JSON.stringify(escala));
       }
+
       if (json.configs.salario) {
-        config = Object.assign(config, json.configs.salario);
+        const salNu = json.configs.salario;
+        if (salNu.valorSalario) { config.valorSalario = Number(salNu.valorSalario); dadosEncontrados = true; }
+        if (salNu.cargaMensal) config.cargaMensal = Number(salNu.cargaMensal);
+        if (salNu.adicionalHE) config.adicionalHE = Number(salNu.adicionalHE);
+        if (salNu.grauInsalubridade !== undefined) config.grauInsalubridade = Number(salNu.grauInsalubridade);
+        if (salNu.baseInsalubridade) config.baseInsalubridade = salNu.baseInsalubridade;
+        if (salNu.salarioMinimo) config.salarioMinimo = Number(salNu.salarioMinimo);
+        if (salNu.tipoRemuneracao) config.tipoRemuneracao = salNu.tipoRemuneracao;
         localStorage.setItem('ponto_config', JSON.stringify(config));
       }
+
       carregarValores();
       calcularMetricas();
-      statusOcr.innerText = "✅ Escala e parâmetros salariais sincronizados da planilha!";
-      statusOcr.style.color = "#15803d";
+
+      if (dadosEncontrados) {
+        statusOcr.innerText = "✅ Escala e parâmetros salariais sincronizados da planilha!";
+        statusOcr.style.color = "#15803d";
+      } else {
+        statusOcr.innerText = "ℹ️ A planilha ainda não possui configurações salvas. Salve sua escala primeiro!";
+        statusOcr.style.color = "#0284c7";
+      }
     }
   } catch (e) {
-    console.warn("Não foi possível sincronizar da nuvem:", e);
+    console.warn("Não foi possível puxar da nuvem:", e);
+    statusOcr.innerText = "⚠️ Não foi possível conectar à planilha no momento.";
+    statusOcr.style.color = "#d97706";
   }
 }
 
@@ -342,7 +399,7 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
         localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
         renderizarTabela();
       }
-      statusOcr.innerText = `✅ Salvo com sucesso no aparelho, Google Sheets e Google Drive!`;
+      statusOcr.innerText = `✅ Salvo no aparelho, Google Sheets e Google Drive!`;
       statusOcr.style.color = "#15803d";
     } else {
       statusOcr.innerText = `✅ Salvo no aparelho! (Aguardando sincronização com a nuvem)`;
@@ -358,7 +415,7 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
 window.excluirDia = async function(data) {
   const dataFmt = data.split('-').reverse().join('/');
   const acaoTexto = config.modoExclusao === 'inativar_dia' ? "colocar como STATUS: INATIVO na planilha" : "EXCLUIR a linha da planilha";
-  
+
   if (!confirm(`Deseja retirar o dia ${dataFmt} do espelho e ${acaoTexto}?`)) {
     return;
   }
@@ -432,7 +489,7 @@ document.getElementById('btnSalvarEscala').addEventListener('click', async () =>
   localStorage.setItem('ponto_escala', JSON.stringify(escala));
   calcularMetricas();
 
-  statusOcr.innerText = "⏳ Salvando horários da escala na planilha...";
+  statusOcr.innerText = "⏳ Salvando escala na planilha...";
   statusOcr.style.color = "#0284c7";
   await sincronizarConfigComPlanilha();
   statusOcr.innerText = "✅ Escala salva no aparelho e na planilha (aba 'Configuracoes')!";
@@ -455,7 +512,7 @@ document.getElementById('btnSalvarConfig').addEventListener('click', async () =>
   localStorage.setItem('ponto_config', JSON.stringify(config));
   calcularMetricas();
 
-  statusOcr.innerText = "⏳ Salvando parâmetros salariais na planilha...";
+  statusOcr.innerText = "⏳ Salvando parâmetros na planilha...";
   statusOcr.style.color = "#0284c7";
   await sincronizarConfigComPlanilha();
   statusOcr.innerText = "✅ Parâmetros salvos no aparelho e na planilha!";
@@ -836,4 +893,3 @@ window.mostrarFrameOnibus = function(tipo) {
 carregarValores();
 renderizarTabela();
 calcularMetricas();
-puxarConfigsDaPlanilha();
