@@ -31,6 +31,10 @@ let config = JSON.parse(localStorage.getItem('ponto_config') || JSON.stringify({
   grauInsalubridade: 20,
   baseInsalubridade: "minimo",
   salarioMinimo: 1412,
+  descVT: 0, // 0 calcula teto de 6%
+  descVR: 0,
+  descConvenio: 0,
+  descOutros: 0,
   modoExclusao: "inativar_dia",
   apiNuvem: "https://script.google.com/macros/s/AKfycbzTk_QPMWBHbNpagrSFKmk2O8r2Wenlm5ECRjK-lQlBJOShoLL9Z1HBusMpDBW0CWJJ/exec"
 }));
@@ -59,6 +63,10 @@ function carregarValores() {
   document.getElementById('cfgGrauInsalubridade').value = config.grauInsalubridade !== undefined ? config.grauInsalubridade : 20;
   document.getElementById('cfgBaseInsalubridade').value = config.baseInsalubridade || "minimo";
   document.getElementById('cfgSalarioMinimo').value = config.salarioMinimo || 1412;
+  document.getElementById('cfgDescVT').value = config.descVT || 0;
+  document.getElementById('cfgDescVR').value = config.descVR || 0;
+  document.getElementById('cfgDescConvenio').value = config.descConvenio || 0;
+  document.getElementById('cfgDescOutros').value = config.descOutros || 0;
   document.getElementById('cfgApiNuvem').value = config.apiNuvem;
   document.getElementById('cfgModoExclusao').value = config.modoExclusao || "inativar_dia";
 
@@ -74,7 +82,7 @@ function ajustarExibicaoCargaMensal() {
 document.getElementById('cfgTipoRemuneracao').addEventListener('change', ajustarExibicaoCargaMensal);
 document.getElementById('regData').value = new Date().toISOString().split('T')[0];
 
-// --- MENU LATERAL (DRAWER) ---
+// --- MENU LATERAL (DRAWER) E NAVEGAÇÃO ENTRE ABAS ---
 const btnMenu = document.getElementById('btnMenu');
 const btnFecharMenu = document.getElementById('btnFecharMenu');
 const menuLateral = document.getElementById('menuLateral');
@@ -90,19 +98,75 @@ btnMenu.addEventListener('click', alternarMenu);
 btnFecharMenu.addEventListener('click', alternarMenu);
 overlay.addEventListener('click', alternarMenu);
 
+function navegarParaAba(abaAlvo) {
+  navLinks.forEach(l => {
+    l.classList.toggle('active', l.getAttribute('data-aba') === abaAlvo);
+  });
+  document.querySelectorAll('.aba-conteudo').forEach(aba => {
+    aba.classList.toggle('active', aba.id === abaAlvo);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.navegarParaAba = navegarParaAba;
+
 navLinks.forEach(link => {
   link.addEventListener('click', (e) => {
     e.preventDefault();
-    const abaAlvo = link.getAttribute('data-aba');
-
-    navLinks.forEach(l => l.classList.remove('active'));
-    link.classList.add('active');
-
-    document.querySelectorAll('.aba-conteudo').forEach(aba => aba.classList.remove('active'));
-    document.getElementById(abaAlvo).classList.add('active');
-
+    navegarParaAba(link.getAttribute('data-aba'));
     alternarMenu();
   });
+});
+
+// --- LÓGICA INTELIGENTE DE PRÉ-PREENCHIMENTO POR HORÁRIO E HISTÓRICO ---
+function sugerirTipoBatida(dataIso, horaStr) {
+  const diaObj = diasPonto[dataIso] || {};
+  if (!horaStr) return "e1";
+
+  const [h, m] = horaStr.split(':').map(Number);
+  const minAtual = h * 60 + m;
+
+  const minEntrada = timeToMinutes(escala.entrada) || (5 * 60 + 20);
+  const minAlmocoSaida = timeToMinutes(escala.almocoSaida) || (11 * 60);
+  const minAlmocoVolta = timeToMinutes(escala.almocoVolta) || (12 * 60);
+  const minSaida = timeToMinutes(escala.saida) || (14 * 60 + 40);
+
+  // Por volta das 05h (ou antes das 09h)
+  if (minAtual < minAlmocoSaida - 90) {
+    return "e1";
+  }
+
+  // Por volta do horário de almoço (ex: entre 09:30 e 13:00)
+  if (minAtual >= minAlmocoSaida - 90 && minAtual <= minAlmocoVolta + 60) {
+    if (!diaObj.e1) return "e1"; // se nem bateu entrada, sugere entrada
+    if (!diaObj.s1) return "s1"; // se já tem entrada, sugere saída almoço
+    if (!diaObj.e2) return "e2"; // se já tem saída de almoço, sugere volta
+    return "s2";
+  }
+
+  // Horário da tarde / saída final (após almoço)
+  if (minAtual > minAlmocoVolta + 60) {
+    if (diaObj.e1 && diaObj.s1 && !diaObj.e2) return "e2";
+    return "s2";
+  }
+
+  return "e1";
+}
+
+// Ao mudar manualmente o horário ou a data, reavalia a sugestão automática
+document.getElementById('regHora').addEventListener('change', () => {
+  const data = document.getElementById('regData').value;
+  const hora = document.getElementById('regHora').value;
+  const tipoSugerido = sugerirTipoBatida(data, hora);
+  document.getElementById('regTipo').value = tipoSugerido;
+});
+
+document.getElementById('regData').addEventListener('change', () => {
+  const data = document.getElementById('regData').value;
+  const hora = document.getElementById('regHora').value;
+  if (hora) {
+    document.getElementById('regTipo').value = sugerirTipoBatida(data, hora);
+  }
 });
 
 // --- PRÉ-PROCESSAMENTO ROBUSTO PARA CANHOTO TÉRMICO ---
@@ -162,7 +226,6 @@ function processarImagemCanvas(file) {
   });
 }
 
-// --- EXTRATOR ROBUSTO DE DATA E HORA ---
 function extrairDataHoraTexto(rawText) {
   let limpo = rawText.toUpperCase();
   limpo = limpo.replace(/D\s*[\r\n]+\s*ATA/g, "DATA");
@@ -227,21 +290,17 @@ inputFoto.addEventListener('change', async (e) => {
 
     if (dataDetectada) {
       document.getElementById('regData').value = dataDetectada;
-
-      const diaObj = diasPonto[dataDetectada] || {};
-      const selectTipo = document.getElementById('regTipo');
-      if (!diaObj.e1) selectTipo.value = "e1";
-      else if (!diaObj.s1) selectTipo.value = "s1";
-      else if (!diaObj.e2) selectTipo.value = "e2";
-      else selectTipo.value = "s2";
     }
 
     if (horaDetectada) {
       document.getElementById('regHora').value = horaDetectada;
     }
 
+    // Sugestão inteligente com base no horário lido
     if (dataDetectada && horaDetectada) {
-      statusOcr.innerText = `✅ Reconhecido com sucesso! Data: ${dataDetectada.split('-').reverse().join('/')} | Hora: ${horaDetectada}`;
+      const tipoSugerido = sugerirTipoBatida(dataDetectada, horaDetectada);
+      document.getElementById('regTipo').value = tipoSugerido;
+      statusOcr.innerText = `✅ Reconhecido! Data: ${dataDetectada.split('-').reverse().join('/')} | Hora: ${horaDetectada}`;
       statusOcr.style.color = "#15803d";
     } else if (dataDetectada || horaDetectada) {
       statusOcr.innerText = `⚠️ Leitura parcial. Confira data e hora nos campos.`;
@@ -257,7 +316,7 @@ inputFoto.addEventListener('change', async (e) => {
   }
 });
 
-// --- COMUNICAÇÃO COM A PLANILHA (POST E GET) ---
+// --- COMUNICAÇÃO COM A PLANILHA ---
 async function enviarParaNuvem(payload) {
   if (!config.apiNuvem) return null;
 
@@ -287,58 +346,65 @@ async function enviarParaNuvem(payload) {
   }
 }
 
-async function puxarConfigsDaPlanilha() {
+// Carregar Configurações e Batidas da Planilha com Prioridade
+async function carregarDadosDaNuvemComPrioridade() {
   if (!config.apiNuvem) return;
-  statusOcr.innerText = "⏳ Buscando escala e salário salvos na planilha...";
+  statusOcr.innerText = "⏳ Sincronizando dados com a Planilha Google...";
   statusOcr.style.color = "#0284c7";
 
   try {
     const res = await fetch(config.apiNuvem);
     const json = await res.json();
-    if (json && json.status === "sucesso" && json.configs) {
-      let dadosEncontrados = false;
+    if (json && json.status === "sucesso") {
+      // 1. Atualiza Escala e Salário se existirem na planilha
+      if (json.configs) {
+        if (json.configs.escala) {
+          const escNu = json.configs.escala;
+          if (escNu.entrada) escala.entrada = escNu.entrada;
+          if (escNu.almocoSaida) escala.almocoSaida = escNu.almocoSaida;
+          if (escNu.almocoVolta) escala.almocoVolta = escNu.almocoVolta;
+          if (escNu.saida) escala.saida = escNu.saida;
+          if (escNu.cargaDia) escala.cargaDia = Number(escNu.cargaDia);
+          localStorage.setItem('ponto_escala', JSON.stringify(escala));
+        }
 
-      if (json.configs.escala) {
-        const escNu = json.configs.escala;
-        if (escNu.entrada) { escala.entrada = escNu.entrada; dadosEncontrados = true; }
-        if (escNu.almocoSaida) { escala.almocoSaida = escNu.almocoSaida; dadosEncontrados = true; }
-        if (escNu.almocoVolta) { escala.almocoVolta = escNu.almocoVolta; dadosEncontrados = true; }
-        if (escNu.saida) { escala.saida = escNu.saida; dadosEncontrados = true; }
-        if (escNu.cargaDia) { escala.cargaDia = Number(escNu.cargaDia); dadosEncontrados = true; }
-        localStorage.setItem('ponto_escala', JSON.stringify(escala));
+        if (json.configs.salario) {
+          const salNu = json.configs.salario;
+          if (salNu.valorSalario) config.valorSalario = Number(salNu.valorSalario);
+          if (salNu.cargaMensal) config.cargaMensal = Number(salNu.cargaMensal);
+          if (salNu.adicionalHE) config.adicionalHE = Number(salNu.adicionalHE);
+          if (salNu.grauInsalubridade !== undefined) config.grauInsalubridade = Number(salNu.grauInsalubridade);
+          if (salNu.baseInsalubridade) config.baseInsalubridade = salNu.baseInsalubridade;
+          if (salNu.salarioMinimo) config.salarioMinimo = Number(salNu.salarioMinimo);
+          if (salNu.tipoRemuneracao) config.tipoRemuneracao = salNu.tipoRemuneracao;
+          if (salNu.descVT !== undefined) config.descVT = Number(salNu.descVT);
+          if (salNu.descVR !== undefined) config.descVR = Number(salNu.descVR);
+          if (salNu.descConvenio !== undefined) config.descConvenio = Number(salNu.descConvenio);
+          if (salNu.descOutros !== undefined) config.descOutros = Number(salNu.descOutros);
+          localStorage.setItem('ponto_config', JSON.stringify(config));
+        }
       }
 
-      if (json.configs.salario) {
-        const salNu = json.configs.salario;
-        if (salNu.valorSalario) { config.valorSalario = Number(salNu.valorSalario); dadosEncontrados = true; }
-        if (salNu.cargaMensal) config.cargaMensal = Number(salNu.cargaMensal);
-        if (salNu.adicionalHE) config.adicionalHE = Number(salNu.adicionalHE);
-        if (salNu.grauInsalubridade !== undefined) config.grauInsalubridade = Number(salNu.grauInsalubridade);
-        if (salNu.baseInsalubridade) config.baseInsalubridade = salNu.baseInsalubridade;
-        if (salNu.salarioMinimo) config.salarioMinimo = Number(salNu.salarioMinimo);
-        if (salNu.tipoRemuneracao) config.tipoRemuneracao = salNu.tipoRemuneracao;
-        localStorage.setItem('ponto_config', JSON.stringify(config));
+      // 2. Prioridade para as Batidas vindas da Planilha
+      if (json.batidas && Object.keys(json.batidas).length > 0) {
+        diasPonto = json.batidas;
+        localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
       }
 
       carregarValores();
+      renderizarTabela();
       calcularMetricas();
-
-      if (dadosEncontrados) {
-        statusOcr.innerText = "✅ Escala e parâmetros salariais sincronizados da planilha!";
-        statusOcr.style.color = "#15803d";
-      } else {
-        statusOcr.innerText = "ℹ️ A planilha ainda não possui configurações salvas. Salve sua escala primeiro!";
-        statusOcr.style.color = "#0284c7";
-      }
+      statusOcr.innerText = "✅ Espelho e configurações sincronizados da Planilha Google!";
+      statusOcr.style.color = "#15803d";
     }
   } catch (e) {
-    console.warn("Não foi possível puxar da nuvem:", e);
-    statusOcr.innerText = "⚠️ Não foi possível conectar à planilha no momento.";
+    console.warn("Não foi possível carregar da nuvem:", e);
+    statusOcr.innerText = "Dados locais carregados (sem conexão com a planilha).";
     statusOcr.style.color = "#d97706";
   }
 }
 
-// --- LANÇAR BATIDA NO DIA ---
+// --- LANÇAR BATIDA NO DIA COM ALERTA DE DUPLICIDADE ---
 document.getElementById('btnSalvarBatida').addEventListener('click', async () => {
   const data = document.getElementById('regData').value;
   const hora = document.getElementById('regHora').value;
@@ -349,6 +415,15 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
   if (!data || !hora) {
     alert("Informe data e hora.");
     return;
+  }
+
+  // Alerta de tipo já preenchido
+  if (diasPonto[data] && diasPonto[data][tipo]) {
+    const horaJaSalva = diasPonto[data][tipo];
+    const confirmar = confirm(`Atenção: Para o dia ${data.split('-').reverse().join('/')}, já existe uma batida de '${tipoNome}' registrada às ${horaJaSalva}.\n\nDeseja substituir por ${hora}?`);
+    if (!confirmar) {
+      return;
+    }
   }
 
   if (!diasPonto[data]) {
@@ -395,7 +470,7 @@ document.getElementById('btnSalvarBatida').addEventListener('click', async () =>
   }
 });
 
-// --- EXCLUIR UMA FOTO ESPECÍFICA DO GOOGLE DRIVE PELO SITE ---
+// --- EXCLUIR UMA FOTO ESPECÍFICA DO GOOGLE DRIVE ---
 window.excluirFotoDrive = async function(data, tipoKey) {
   const dia = diasPonto[data];
   if (!dia || !dia.linksFotos || !dia.linksFotos[tipoKey]) return;
@@ -408,7 +483,6 @@ window.excluirFotoDrive = async function(data, tipoKey) {
     return;
   }
 
-  // Remove localmente
   delete dia.linksFotos[tipoKey];
   localStorage.setItem('ponto_dias', JSON.stringify(diasPonto));
   renderizarTabela();
@@ -432,7 +506,7 @@ window.excluirFotoDrive = async function(data, tipoKey) {
   }
 };
 
-// --- EXCLUIR OU INATIVAR NA PLANILHA E APARELHO (E DRIVE) ---
+// --- EXCLUIR OU INATIVAR NA PLANILHA E APARELHO ---
 window.excluirDia = async function(data) {
   const dataFmt = data.split('-').reverse().join('/');
   const acaoTexto = config.modoExclusao === 'inativar_dia' 
@@ -496,7 +570,11 @@ async function sincronizarConfigComPlanilha() {
       adicionalHE: config.adicionalHE,
       grauInsalubridade: config.grauInsalubridade,
       baseInsalubridade: config.baseInsalubridade,
-      salarioMinimo: config.salarioMinimo
+      salarioMinimo: config.salarioMinimo,
+      descVT: config.descVT,
+      descVR: config.descVR,
+      descConvenio: config.descConvenio,
+      descOutros: config.descOutros
     }
   });
 }
@@ -515,7 +593,7 @@ document.getElementById('btnSalvarEscala').addEventListener('click', async () =>
   statusOcr.innerText = "⏳ Salvando escala na planilha...";
   statusOcr.style.color = "#0284c7";
   await sincronizarConfigComPlanilha();
-  statusOcr.innerText = "✅ Escala salva no aparelho e na planilha (aba 'Configuracoes')!";
+  statusOcr.innerText = "✅ Escala salva no aparelho e na planilha!";
   statusOcr.style.color = "#15803d";
   alert("Horários da escala salvos no aparelho e na planilha Google!");
 });
@@ -529,23 +607,27 @@ document.getElementById('btnSalvarConfig').addEventListener('click', async () =>
     grauInsalubridade: parseFloat(document.getElementById('cfgGrauInsalubridade').value) || 0,
     baseInsalubridade: document.getElementById('cfgBaseInsalubridade').value,
     salarioMinimo: parseFloat(document.getElementById('cfgSalarioMinimo').value) || 1412,
+    descVT: parseFloat(document.getElementById('cfgDescVT').value) || 0,
+    descVR: parseFloat(document.getElementById('cfgDescVR').value) || 0,
+    descConvenio: parseFloat(document.getElementById('cfgDescConvenio').value) || 0,
+    descOutros: parseFloat(document.getElementById('cfgDescOutros').value) || 0,
     modoExclusao: document.getElementById('cfgModoExclusao').value,
     apiNuvem: document.getElementById('cfgApiNuvem').value.trim()
   };
   localStorage.setItem('ponto_config', JSON.stringify(config));
   calcularMetricas();
 
-  statusOcr.innerText = "⏳ Salvando parâmetros na planilha...";
+  statusOcr.innerText = "⏳ Salvando parâmetros e descontos na planilha...";
   statusOcr.style.color = "#0284c7";
   await sincronizarConfigComPlanilha();
   statusOcr.innerText = "✅ Parâmetros salvos no aparelho e na planilha!";
   statusOcr.style.color = "#15803d";
-  alert("Parâmetros salariais salvos no aparelho e na planilha Google!");
+  alert("Parâmetros e descontos salvos com sucesso!");
 });
 
-document.getElementById('btnPuxarDaNuvem').addEventListener('click', puxarConfigsDaPlanilha);
+document.getElementById('btnPuxarDaNuvem').addEventListener('click', carregarDadosDaNuvemComPrioridade);
 
-// --- CÁLCULO E RENDERIZAÇÃO DO ESPELHO ---
+// --- CÁLCULO DAS HORAS DO DIA ---
 function timeToMinutes(t) {
   if (!t) return null;
   const [h, m] = t.split(':').map(Number);
@@ -587,7 +669,6 @@ function renderizarTabela() {
     const dia = diasPonto[data];
     const { minutosTrabalhados, minutosExtras } = calcularDia(dia);
 
-    // Links para fotos no Drive + botão individual de excluir do Drive
     let fotosHtml = '-';
     if (dia.linksFotos && Object.keys(dia.linksFotos).length > 0) {
       fotosHtml = '<div class="links-fotos-grid">';
@@ -596,8 +677,8 @@ function renderizarTabela() {
           const rotulos = ['E1', 'S1', 'E2', 'S2'];
           fotosHtml += `
             <div class="item-foto-badge">
-              <a href="${dia.linksFotos[k]}" target="_blank" class="badge-foto" title="Abrir foto no Google Drive">${rotulos[idx]}</a>
-              <button onclick="excluirFotoDrive('${data}', '${k}')" class="btn-del-foto" title="Excluir esta foto do Google Drive">✕</button>
+              <a href="${dia.linksFotos[k]}" target="_blank" class="badge-foto" title="Abrir foto">${rotulos[idx]}</a>
+              <button onclick="excluirFotoDrive('${data}', '${k}')" class="btn-del-foto" title="Excluir do Drive">✕</button>
             </div>
           `;
         }
@@ -615,12 +696,45 @@ function renderizarTabela() {
       <td><strong>${minToHoursStr(minutosTrabalhados)}</strong></td>
       <td style="color:${minutosExtras > 0 ? '#16a34a' : '#64748b'}">${minToHoursStr(minutosExtras)}</td>
       <td>${fotosHtml}</td>
-      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Retirar dia e excluir fotos do Drive">🗑️</button></td>
+      <td><button onclick="excluirDia('${data}')" class="btn-perigo" title="Retirar dia e excluir do Drive">🗑️</button></td>
     `;
     tbody.appendChild(tr);
   });
 }
 
+// --- CÁLCULO DE IMPOSTOS CLT (INSS E IRPF PROGRESSIVOS) ---
+function calcularINSS(baseCalc) {
+  // Tabela INSS progressiva
+  const f1 = 1412.00, t1 = 0.075;
+  const f2 = 2666.68, t2 = 0.09;
+  const f3 = 4000.03, t3 = 0.12;
+  const f4 = 7786.02, t4 = 0.14;
+
+  let desc = 0;
+  if (baseCalc <= f1) {
+    desc = baseCalc * t1;
+  } else if (baseCalc <= f2) {
+    desc = (f1 * t1) + ((baseCalc - f1) * t2);
+  } else if (baseCalc <= f3) {
+    desc = (f1 * t1) + ((f2 - f1) * t2) + ((baseCalc - f2) * t3);
+  } else if (baseCalc <= f4) {
+    desc = (f1 * t1) + ((f2 - f1) * t2) + ((f3 - f2) * t3) + ((baseCalc - f3) * t4);
+  } else {
+    desc = (f1 * t1) + ((f2 - f1) * t2) + ((f3 - f2) * t3) + ((f4 - f3) * t4);
+  }
+  return desc;
+}
+
+function calcularIRPF(baseIR) {
+  // Tabela IRPF progressiva
+  if (baseIR <= 2259.20) return 0;
+  if (baseIR <= 2826.65) return (baseIR * 0.075) - 169.44;
+  if (baseIR <= 3751.05) return (baseIR * 0.15) - 381.44;
+  if (baseIR <= 4664.68) return (baseIR * 0.225) - 662.77;
+  return (baseIR * 0.275) - 896.00;
+}
+
+// --- CÁLCULO DAS MÉTRICAS E DASHBOARD DE SALÁRIO ---
 function calcularMetricas() {
   let totalMinutosTrabalhados = 0;
   let totalMinutosExtras = 0;
@@ -645,19 +759,55 @@ function calcularMetricas() {
   const valorHoraExtra = valorHora * (1 + config.adicionalHE / 100);
   const totalValorExtras = (totalMinutosExtras / 60) * valorHoraExtra;
 
+  // Insalubridade
   const baseInsalubridade = (config.baseInsalubridade === 'base') ? config.valorSalario : config.salarioMinimo;
   const valorInsalubridade = baseInsalubridade * (config.grauInsalubridade / 100);
 
+  // Remuneração Bruta
   const totalGeralBruto = valorSalarioBaseExibido + totalValorExtras + valorInsalubridade;
 
-  document.getElementById('mHorasTrabalhadas').innerText = minToHoursStr(totalMinutosTrabalhados);
-  document.getElementById('mHorasExtras').innerText = minToHoursStr(totalMinutosExtras);
+  // Descontos Oficiais
+  const descINSS = calcularINSS(totalGeralBruto);
+  const baseCalculoIR = Math.max(0, totalGeralBruto - descINSS);
+  const descIRPF = Math.max(0, calcularIRPF(baseCalculoIR));
+
+  // Vale Transporte: se informado 0, calcula teto de 6% do salário base
+  let valorDescVT = config.descVT;
+  if (valorDescVT === 0) {
+    valorDescVT = valorSalarioBaseExibido * 0.06;
+  }
+
+  const valorDescVR = config.descVR || 0;
+  const valorDescConvenio = config.descConvenio || 0;
+  const valorDescOutros = config.descOutros || 0;
+
+  const totalDescontos = descINSS + descIRPF + valorDescVT + valorDescVR + valorDescConvenio + valorDescOutros;
+  const salarioLiquidoEstimado = Math.max(0, totalGeralBruto - totalDescontos);
+  const valorFGTS = totalGeralBruto * 0.08;
 
   const fmtMoeda = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  document.getElementById('mValorBase').innerText = fmtMoeda(valorSalarioBaseExibido);
+
+  // 1. Atualização do Resumo Enxuto na Tela Principal (sem salário base)
+  document.getElementById('mHorasTrabalhadas').innerText = minToHoursStr(totalMinutosTrabalhados);
+  document.getElementById('mHorasExtras').innerText = minToHoursStr(totalMinutosExtras);
   document.getElementById('mValorExtras').innerText = fmtMoeda(totalValorExtras);
-  document.getElementById('mValorInsalubridade').innerText = fmtMoeda(valorInsalubridade);
-  document.getElementById('mTotalEstimado').innerText = fmtMoeda(totalGeralBruto);
+
+  // 2. Atualização do Dashboard de Salário Líquido
+  document.getElementById('dashSalarioBase').innerText = fmtMoeda(valorSalarioBaseExibido);
+  document.getElementById('dashHorasExtras').innerText = `+ ${fmtMoeda(totalValorExtras)}`;
+  document.getElementById('dashInsalubridade').innerText = `+ ${fmtMoeda(valorInsalubridade)}`;
+  document.getElementById('dashTotalBruto').innerText = fmtMoeda(totalGeralBruto);
+
+  document.getElementById('dashINSS').innerText = `- ${fmtMoeda(descINSS)}`;
+  document.getElementById('dashIRPF').innerText = `- ${fmtMoeda(descIRPF)}`;
+  document.getElementById('dashDescVT').innerText = `- ${fmtMoeda(valorDescVT)}`;
+  document.getElementById('dashDescVR').innerText = `- ${fmtMoeda(valorDescVR)}`;
+  document.getElementById('dashDescConvenio').innerText = `- ${fmtMoeda(valorDescConvenio)}`;
+  document.getElementById('dashDescOutros').innerText = `- ${fmtMoeda(valorDescOutros)}`;
+  document.getElementById('dashTotalDescontos').innerText = fmtMoeda(totalDescontos);
+
+  document.getElementById('dashSalarioLiquido').innerText = fmtMoeda(salarioLiquidoEstimado);
+  document.getElementById('dashFGTS').innerText = fmtMoeda(valorFGTS);
 }
 
 // --- EXPORTAÇÃO E BACKUP ---
@@ -918,7 +1068,9 @@ window.mostrarFrameOnibus = function(tipo) {
   }
 };
 
-// Inicialização
+// --- INICIALIZAÇÃO GERAL ---
 carregarValores();
 renderizarTabela();
 calcularMetricas();
+// Prioridade: busca da planilha do Google ao iniciar o app
+carregarDadosDaNuvemComPrioridade();

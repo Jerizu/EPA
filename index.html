@@ -15,6 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
+  <!-- Banner Flutuante de Alerta -->
   <div id="bannerAlerta">
     <strong id="bannerTitulo">⏱️ Lembrete de Ponto</strong>
     <p id="bannerCorpo">Horário da sua batida de ponto se aproximando.</p>
@@ -26,24 +27,26 @@
     <a href="https://docs.google.com/forms/d/e/1FAIpQLSc8hXlvBFyvMDxdgjZxm3nSENEMktWydQohIa9c0hkPJhiAUA/viewform" target="_blank" class="btn-marmita">🍱 Marmita</a>
   </header>
 
+  <!-- Gaveta Lateral -->
   <nav id="menuLateral" class="drawer">
     <div class="drawer-header">
       <h3>Menu</h3>
       <button id="btnFecharMenu" class="btn-icone">✕</button>
     </div>
     <ul class="drawer-links">
-      <li><a href="#" class="nav-item active" data-aba="abaPonto">⏱️ Registro & Apuração Diária</a></li>
+      <li><a href="#" class="nav-item active" data-aba="abaPonto">⏱️ Registro & Espelho</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaDashboard">💰 Dashboard de Salário</a></li>
       <li><a href="#" class="nav-item" data-aba="abaEscala">📅 Horários da Escala</a></li>
       <li><a href="#" class="nav-item" data-aba="abaMarmita">🍱 Pedir Marmita</a></li>
       <li><a href="#" class="nav-item" data-aba="abaOnibus">🚌 Linhas de Ônibus (SITU / RLC)</a></li>
-      <li><a href="#" class="nav-item" data-aba="abaConfig">⚙️ Salário & Nuvem</a></li>
+      <li><a href="#" class="nav-item" data-aba="abaConfig">⚙️ Parâmetros Salariais & Nuvem</a></li>
       <li><a href="#" class="nav-item" data-aba="abaBackup">💾 Backup & Exportar Dados</a></li>
     </ul>
   </nav>
   <div id="overlay" class="overlay"></div>
 
   <main class="container">
-    <!-- ABA 1: REGISTRO DE PONTO -->
+    <!-- ABA 1: REGISTRO DE PONTO E RESUMO ENXUTO -->
     <section id="abaPonto" class="aba-conteudo active">
       <div class="card card-lembrete">
         <div>
@@ -83,6 +86,7 @@
         <button id="btnSalvarBatida" class="btn-primario">Lançar Batida & Salvar na Nuvem</button>
       </div>
 
+      <!-- Resumo Enxuto do Período -->
       <div class="card">
         <h2>📊 Resumo do Período</h2>
         <div class="metricas-grid">
@@ -94,25 +98,15 @@
             <span>Saldo Horas Extras</span>
             <strong id="mHorasExtras">0h 00m</strong>
           </div>
-          <div class="metrica">
-            <span>Salário Base</span>
-            <strong id="mValorBase">R$ 0,00</strong>
-          </div>
-          <div class="metrica">
-            <span>Valor Horas Extras</span>
-            <strong id="mValorExtras">R$ 0,00</strong>
-          </div>
-          <div class="metrica destaque">
-            <span>Insalubridade</span>
-            <strong id="mValorInsalubridade">R$ 0,00</strong>
-          </div>
-          <div class="metrica total">
-            <span>Remuneração Bruta Estimada</span>
-            <strong id="mTotalEstimado">R$ 0,00</strong>
+          <div class="metrica destaque col-span-2">
+            <span>Valor Provável de Horas Extras a Receber</span>
+            <strong id="mValorExtras" style="font-size: 1.25rem;">R$ 0,00</strong>
           </div>
         </div>
+        <button onclick="navegarParaAba('abaDashboard')" class="btn-secundario" style="margin-top: 10px;">Ver Estimativa Salarial Completa no Dashboard ➔</button>
       </div>
 
+      <!-- Espelho de Ponto -->
       <div class="card">
         <div class="tabela-header">
           <h2>Espelho de Ponto</h2>
@@ -139,11 +133,84 @@
       </div>
     </section>
 
-    <!-- ABA 2: ESCALA DE HORÁRIOS -->
+    <!-- ABA 2: NOVO DASHBOARD DE REMUNERAÇÃO LÍQUIDA -->
+    <section id="abaDashboard" class="aba-conteudo">
+      <div class="card">
+        <h2>💰 Estimativa Salarial e Fechamento</h2>
+        <p class="legenda">Cálculo detalhado com base nas horas trabalhadas e alíquotas oficiais de desconto.</p>
+
+        <!-- Card de Proventos -->
+        <div class="dashboard-secao">
+          <h3 class="dash-subtitulo">➕ Proventos (Ganhos Brutos)</h3>
+          <div class="linha-demonstrativo">
+            <span>Salário Base Contratual</span>
+            <strong id="dashSalarioBase">R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Horas Extras Apuradas</span>
+            <strong id="dashHorasExtras" class="txt-verde">+ R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Adicional de Insalubridade</span>
+            <strong id="dashInsalubridade" class="txt-verde">+ R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo total-destaque">
+            <span>Salário Bruto Total</span>
+            <strong id="dashTotalBruto">R$ 0,00</strong>
+          </div>
+        </div>
+
+        <!-- Card de Descontos -->
+        <div class="dashboard-secao" style="margin-top: 14px;">
+          <h3 class="dash-subtitulo">➖ Descontos Legais e Benefícios</h3>
+          <div class="linha-demonstrativo">
+            <span>Previdência Social (INSS Progressivo)</span>
+            <strong id="dashINSS" class="txt-vermelho">- R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Imposto de Renda Retido (IRPF)</span>
+            <strong id="dashIRPF" class="txt-vermelho">- R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Vale Transporte (VT)</span>
+            <strong id="dashDescVT" class="txt-vermelho">- R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Vale Refeição / Alimentação (VR/VA)</span>
+            <strong id="dashDescVR" class="txt-vermelho">- R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Convênio Médico / Odontológico</span>
+            <strong id="dashDescConvenio" class="txt-vermelho">- R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo">
+            <span>Outros Descontos em Folha</span>
+            <strong id="dashDescOutros" class="txt-vermelho">- R$ 0,00</strong>
+          </div>
+          <div class="linha-demonstrativo total-destaque-desc">
+            <span>Total de Descontos</span>
+            <strong id="dashTotalDescontos">R$ 0,00</strong>
+          </div>
+        </div>
+
+        <!-- Card Líquido Final -->
+        <div class="metrica total" style="margin-top: 14px; text-align: center; padding: 16px;">
+          <span style="font-size: 0.9rem;">Estimativa de Salário Líquido na Conta</span>
+          <strong id="dashSalarioLiquido" style="font-size: 1.6rem; margin-top: 6px;">R$ 0,00</strong>
+        </div>
+
+        <!-- Informativo FGTS -->
+        <div class="card-info-fgts">
+          <span>ℹ️ <strong>FGTS a Recolher pela Empresa (8%):</strong> <span id="dashFGTS">R$ 0,00</span> (Depósito em conta vinculada, não descontado do seu salário).</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: ESCALA DE HORÁRIOS -->
     <section id="abaEscala" class="aba-conteudo">
       <div class="card">
         <h2>📅 Horários Previstos da Escala</h2>
-        <p class="legenda">Configure os horários para cálculo de extras e lembretes automáticos 5 minutos antes.</p>
+        <p class="legenda">Configure os horários para sugestão automática das batidas e lembretes 5 minutos antes.</p>
         <div class="form-grid">
           <label>Entrada Prevista:
             <input type="time" id="escEntrada" value="05:20" />
@@ -165,7 +232,7 @@
       </div>
     </section>
 
-    <!-- ABA 3: PEDIR MARMITA -->
+    <!-- ABA 4: PEDIR MARMITA -->
     <section id="abaMarmita" class="aba-conteudo">
       <div class="card">
         <div class="cabecalho-secao">
@@ -182,7 +249,7 @@
       </div>
     </section>
 
-    <!-- ABA 4: ÔNIBUS -->
+    <!-- ABA 5: ÔNIBUS -->
     <section id="abaOnibus" class="aba-conteudo">
       <div class="card">
         <h2>🚌 Consulta de Linhas e Horários</h2>
@@ -213,10 +280,10 @@
       </div>
     </section>
 
-    <!-- ABA 5: CONFIGURAÇÕES E SALÁRIO -->
+    <!-- ABA 6: CONFIGURAÇÕES SALARIAIS, DESCONTOS E NUVEM -->
     <section id="abaConfig" class="aba-conteudo">
       <div class="card">
-        <h2>⚙️ Parâmetros Salariais & Nuvem</h2>
+        <h2>⚙️ Parâmetros Salariais & Descontos</h2>
         <div class="form-grid">
           <label class="col-span-2">Forma de Remuneração:
             <select id="cfgTipoRemuneracao">
@@ -247,8 +314,24 @@
               <option value="base">Salário Base</option>
             </select>
           </label>
-          <label>Salário Mínimo de Referência (R$):
+          <label>Salário Mínimo Ref (R$):
             <input type="number" id="cfgSalarioMinimo" step="0.01" value="1412" />
+          </label>
+        </div>
+
+        <h3 style="font-size: 0.95rem; margin-top: 14px; color: #1e293b;">Descontos em Folha de Pagamento:</h3>
+        <div class="form-grid">
+          <label>Desconto Vale Transporte (R$ ou 0 p/ 6%):
+            <input type="number" id="cfgDescVT" step="0.01" value="0" placeholder="0 = calcula até 6%" />
+          </label>
+          <label>Desconto Vale Refeição (R$):
+            <input type="number" id="cfgDescVR" step="0.01" value="0" />
+          </label>
+          <label>Desconto Convênio Médico (R$):
+            <input type="number" id="cfgDescConvenio" step="0.01" value="0" />
+          </label>
+          <label>Outros Descontos em Folha (R$):
+            <input type="number" id="cfgDescOutros" step="0.01" value="0" />
           </label>
           <label class="col-span-2">URL da API Nuvem (Google Apps Script):
             <input type="text" id="cfgApiNuvem" />
@@ -261,11 +344,11 @@
           </label>
         </div>
         <button id="btnSalvarConfig" class="btn-primario">Salvar Parâmetros (Site & Planilha)</button>
-        <button id="btnPuxarDaNuvem" class="btn-secundario" style="margin-top: 10px;">☁️ Puxar Escala e Salário Salvos na Planilha</button>
+        <button id="btnPuxarDaNuvem" class="btn-secundario" style="margin-top: 10px;">☁️ Forçar Atualização da Planilha</button>
       </div>
     </section>
 
-    <!-- ABA 6: BACKUP E EXPORTAÇÃO -->
+    <!-- ABA 7: BACKUP E EXPORTAÇÃO -->
     <section id="abaBackup" class="aba-conteudo">
       <div class="card">
         <h2>💾 Backup & Exportar Dados</h2>
